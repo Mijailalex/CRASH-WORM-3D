@@ -1,0 +1,168 @@
+{
+  "name": "crash-worm-3d",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Epic 3D adventure game inspired by Crash Bandicoot with premium graphics and immersive gameplay",
+  "type": "module",
+  "keywords": [
+    "game",
+    "3d",
+    "react",
+    "threejs",
+    "crash-bandicoot",
+    "adventure",
+    "platformer",
+    "webgl"
+  ],
+  "author": {
+    "name": "Game Development Team",
+    "email": "dev@crashworm3d.com"
+  },
+  "license": "MIT",
+  "homepage": "https://crashworm3d.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/crash-worm-3d.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/crash-worm-3d/issues"
+  },
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint . --ext js,jsx --fix",
+    "preview": "vite preview --host",
+    "format": "prettier --write \"src/**/*.{js,jsx,css,md}\"",
+    "format:check": "prettier --check \"src/**/*.{js,jsx,css,md}\"",
+    "type-check": "tsc --noEmit",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
+    "build:analyze": "npm run build && npx vite-bundle-analyzer dist/stats.html",
+    "clean": "rimraf dist",
+    "prepare": "husky install",
+    "postinstall": "patch-package"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "three": "^0.158.0",
+    "@react-three/fiber": "^8.15.12",
+    "@react-three/drei": "^9.88.13",
+    "@react-three/rapier": "^1.1.0",
+    "framer-motion": "^10.16.16",
+    "styled-components": "^6.1.8",
+    "tone": "^14.7.77",
+    "howler": "^2.2.4",
+    "lodash": "^4.17.21",
+    "mathjs": "^12.2.1",
+    "uuid": "^9.0.1",
+    "moment": "^2.29.4",
+    "axios": "^1.6.2",
+    "@mui/material": "^5.15.3",
+    "@emotion/react": "^11.11.1",
+    "@emotion/styled": "^11.11.0",
+    "@react-spring/web": "^9.7.3",
+    "lottie-web": "^5.12.2",
+    "lottie-react": "^2.4.0",
+    "p5": "^1.7.0",
+    "matter-js": "^0.19.0",
+    "cannon-es": "^0.20.0",
+    "pixi.js": "^7.3.2",
+    "@pixi/react": "^7.1.2",
+    "standardized-audio-context": "^25.3.58"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@types/three": "^0.158.3",
+    "@types/howler": "^2.2.11",
+    "@types/lodash": "^4.14.202",
+    "@types/matter-js": "^0.19.6",
+    "@types/cannon": "^0.20.0",
+    "@types/p5": "^1.7.6",
+    "@types/uuid": "^9.0.7",
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.0.8",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.2",
+    "prettier": "^3.1.1",
+    "typescript": "^5.2.2",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.0",
+    "rimraf": "^5.0.5",
+    "patch-package": "^8.0.0",
+    "vitest": "^1.1.0",
+    "@vitest/ui": "^1.1.0",
+    "jsdom": "^23.0.1",
+    "@testing-library/react": "^14.1.2",
+    "@testing-library/jest-dom": "^6.1.6",
+    "vite-bundle-analyzer": "^0.7.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.0",
+    "babel-plugin-styled-components": "^2.1.4",
+    "webpack-bundle-analyzer": "^4.10.1",
+    "workbox-webpack-plugin": "^7.0.0"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "lint-staged": {
+    "*.{js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{css,md}": [
+      "prettier --write"
+    ]
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged",
+      "pre-push": "npm run type-check && npm run test"
+    }
+  },
+  "volta": {
+    "node": "18.18.2",
+    "npm": "9.8.1"
+  },
+  "packageManager": "npm@9.8.1",
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "^4.9.1"
+  },
+  "overrides": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17"
+  },
+  "config": {
+    "port": 3000,
+    "host": "localhost"
+  },
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/your-username"
+  }
+}

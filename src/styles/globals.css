@@ -1,0 +1,759 @@
+/* ========================================
+   CRASH WORM 3D - GLOBAL STYLES
+   Estilos globales premium para el juego
+   ======================================== */
+
+/* Google Fonts Import */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
+/* ========================================
+   RESET Y BASE STYLES
+   ======================================== */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: 'Orbitron', 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  line-height: 1.6;
+  color: #FFFFFF;
+  background: #000000;
+  overflow: hidden;
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ========================================
+   OPTIMIZACIONES DE RENDIMIENTO
+   ======================================== */
+
+* {
+  will-change: auto;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+canvas {
+  display: block;
+  image-rendering: optimizeQuality;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}
+
+/* ========================================
+   ANIMACIONES KEYFRAMES
+   ======================================== */
+
+@keyframes gradientShift {
+  0%, 100% { 
+    background-position: 0% 50%; 
+    transform: scale(1);
+  }
+  50% { 
+    background-position: 100% 50%; 
+    transform: scale(1.02);
+  }
+}
+
+@keyframes cosmicPulse {
+  0%, 100% { 
+    transform: scale(1) rotate(-0.5deg);
+    filter: drop-shadow(0 0 20px rgba(0,255,255,0.6)) brightness(1);
+  }
+  50% { 
+    transform: scale(1.05) rotate(0.5deg);
+    filter: drop-shadow(0 0 40px rgba(64,224,208,0.8)) brightness(1.1);
+  }
+}
+
+@keyframes titleGlow {
+  0%, 100% { 
+    text-shadow: 
+      0 0 10px rgba(255,107,53,0.8),
+      0 0 20px rgba(255,140,66,0.6),
+      0 0 30px rgba(255,165,0,0.4);
+  }
+  50% { 
+    text-shadow: 
+      0 0 20px rgba(255,107,53,1),
+      0 0 40px rgba(255,140,66,0.8),
+      0 0 60px rgba(255,165,0,0.6);
+  }
+}
+
+@keyframes float {
+  0%, 100% { 
+    transform: translateY(0px) rotate(0deg); 
+  }
+  33% { 
+    transform: translateY(-8px) rotate(2deg); 
+  }
+  66% { 
+    transform: translateY(-4px) rotate(-1deg); 
+  }
+}
+
+@keyframes twinkle {
+  0%, 100% { 
+    opacity: 0.3; 
+    transform: scale(1); 
+  }
+  50% { 
+    opacity: 1; 
+    transform: scale(1.4); 
+  }
+}
+
+@keyframes shimmer {
+  0% { 
+    transform: translateX(-100%); 
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% { 
+    transform: translateX(100%); 
+    opacity: 0;
+  }
+}
+
+@keyframes particleRise {
+  0% {
+    transform: translateY(100vh) scale(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100vh) scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes orbitalRotation {
+  0% {
+    transform: rotate(0deg) translateX(50px) rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg) translateX(50px) rotate(-360deg);
+  }
+}
+
+@keyframes neonFlicker {
+  0%, 100% { 
+    text-shadow: 
+      0 0 5px currentColor,
+      0 0 10px currentColor,
+      0 0 15px currentColor;
+  }
+  50% { 
+    text-shadow: 
+      0 0 2px currentColor,
+      0 0 5px currentColor,
+      0 0 8px currentColor;
+  }
+}
+
+@keyframes holographicShift {
+  0% { 
+    background-position: 0% 50%;
+    filter: hue-rotate(0deg);
+  }
+  33% {
+    background-position: 100% 0%;
+    filter: hue-rotate(120deg);
+  }
+  66% {
+    background-position: 0% 100%;
+    filter: hue-rotate(240deg);
+  }
+  100% { 
+    background-position: 0% 50%;
+    filter: hue-rotate(360deg);
+  }
+}
+
+@keyframes energyWave {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0,255,255,0.7);
+    transform: scale(1);
+  }
+  70% {
+    box-shadow: 0 0 0 20px rgba(0,255,255,0);
+    transform: scale(1.05);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0,255,255,0);
+    transform: scale(1);
+  }
+}
+
+/* ========================================
+   CLASES DE UTILIDAD PARA ANIMACIONES
+   ======================================== */
+
+.animate-gradient {
+  animation: gradientShift 4s ease-in-out infinite;
+}
+
+.animate-pulse-cosmic {
+  animation: cosmicPulse 3s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-twinkle {
+  animation: twinkle 2s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+.animate-neon-flicker {
+  animation: neonFlicker 0.5s ease-in-out infinite;
+}
+
+.animate-holographic {
+  animation: holographicShift 8s ease-in-out infinite;
+}
+
+.animate-energy-wave {
+  animation: energyWave 2s infinite;
+}
+
+/* ========================================
+   EFECTOS DE TEXTO PREMIUM
+   ======================================== */
+
+.text-gradient-cosmic {
+  background: linear-gradient(45deg, #00FFFF, #40E0D0, #48D1CC, #87CEEB);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 4s ease-in-out infinite;
+}
+
+.text-gradient-fire {
+  background: linear-gradient(45deg, #FF6B35, #FF8C42, #FFD700, #FFA500);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 3s ease-in-out infinite;
+}
+
+.text-gradient-purple {
+  background: linear-gradient(45deg, #9932CC, #BA68C8, #CE93D8, #E1BEE7);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 5s ease-in-out infinite;
+}
+
+.text-neon-cyan {
+  color: #00FFFF;
+  text-shadow: 
+    0 0 5px #00FFFF,
+    0 0 10px #00FFFF,
+    0 0 15px #00FFFF,
+    0 0 20px #00FFFF;
+  animation: neonFlicker 2s ease-in-out infinite;
+}
+
+.text-neon-pink {
+  color: #FF69B4;
+  text-shadow: 
+    0 0 5px #FF69B4,
+    0 0 10px #FF69B4,
+    0 0 15px #FF69B4,
+    0 0 20px #FF69B4;
+}
+
+.text-holographic {
+  background: linear-gradient(45deg, 
+    #ff0000, #ff8000, #ffff00, #80ff00, 
+    #00ff00, #00ff80, #00ffff, #0080ff, 
+    #0000ff, #8000ff, #ff00ff, #ff0080);
+  background-size: 400% 400%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: holographicShift 6s linear infinite;
+}
+
+/* ========================================
+   EFECTOS DE GLASSMORPHISM
+   ======================================== */
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  box-shadow: 
+    0 8px 32px 0 rgba(31, 38, 135, 0.37),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.glass-panel-dark {
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 
+    0 8px 32px 0 rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* ========================================
+   EFECTOS DE NEOMORPHISM
+   ======================================== */
+
+.neo-button {
+  background: linear-gradient(145deg, #2a2a3e, #232338);
+  box-shadow: 
+    20px 20px 60px #1e1e30,
+    -20px -20px 60px #36364c,
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 20px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.neo-button:hover {
+  box-shadow: 
+    25px 25px 75px #1e1e30,
+    -25px -25px 75px #36364c,
+    inset 0 2px 0 rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.neo-button:active {
+  box-shadow: 
+    inset 20px 20px 60px #1e1e30,
+    inset -20px -20px 60px #36364c;
+  transform: translateY(0px);
+}
+
+/* ========================================
+   EFECTOS DE PARTÍCULAS Y COSMIC
+   ======================================== */
+
+.cosmic-bg {
+  position: relative;
+  overflow: hidden;
+}
+
+.cosmic-bg::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 40% 40%, rgba(120, 200, 255, 0.3) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.floating-particles {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: #00FFFF;
+  border-radius: 50%;
+  box-shadow: 0 0 6px #00FFFF;
+  animation: particleRise 8s linear infinite;
+}
+
+.particle:nth-child(2n) {
+  background: #FF69B4;
+  box-shadow: 0 0 6px #FF69B4;
+  animation-duration: 10s;
+  animation-delay: -2s;
+}
+
+.particle:nth-child(3n) {
+  background: #FFD700;
+  box-shadow: 0 0 6px #FFD700;
+  animation-duration: 12s;
+  animation-delay: -4s;
+}
+
+/* ========================================
+   EFECTOS DE HOVER AVANZADOS
+   ======================================== */
+
+.hover-lift {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-lift:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+.hover-glow {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-glow:hover {
+  box-shadow: 
+    0 0 20px rgba(0, 255, 255, 0.5),
+    0 0 40px rgba(0, 255, 255, 0.3),
+    0 0 60px rgba(0, 255, 255, 0.1);
+  transform: scale(1.05);
+}
+
+.hover-rotate {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-rotate:hover {
+  transform: rotate(5deg) scale(1.05);
+}
+
+/* ========================================
+   SCROLLBAR PERSONALIZADO
+   ======================================== */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(45deg, #00FFFF, #FF69B4);
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(45deg, #40E0D0, #FF1493);
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.7);
+}
+
+/* ========================================
+   RESPONSIVE DESIGN
+   ======================================== */
+
+@media (max-width: 768px) {
+  html {
+    font-size: 14px;
+  }
+  
+  .text-gradient-cosmic,
+  .text-gradient-fire,
+  .text-gradient-purple {
+    font-size: clamp(2rem, 8vw, 4rem);
+  }
+  
+  .glass-panel,
+  .glass-panel-dark {
+    border-radius: 12px;
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+  }
+  
+  .neo-button {
+    border-radius: 15px;
+    padding: 12px 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  html {
+    font-size: 12px;
+  }
+  
+  .particle {
+    width: 1px;
+    height: 1px;
+  }
+  
+  .glass-panel,
+  .glass-panel-dark {
+    border-radius: 10px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+}
+
+/* ========================================
+   DARK MODE UTILITIES
+   ======================================== */
+
+@media (prefers-color-scheme: dark) {
+  .auto-dark {
+    background: #1a1a2e;
+    color: #ffffff;
+  }
+}
+
+/* ========================================
+   PRINT STYLES
+   ======================================== */
+
+@media print {
+  * {
+    background: transparent !important;
+    color: black !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* ========================================
+   ACCESIBILIDAD
+   ======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ========================================
+   FOCUS STYLES
+   ======================================== */
+
+button:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid #00FFFF;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(0, 255, 255, 0.3);
+}
+
+/* ========================================
+   HIGH CONTRAST MODE
+   ======================================== */
+
+@media (prefers-contrast: high) {
+  .text-gradient-cosmic,
+  .text-gradient-fire,
+  .text-gradient-purple {
+    -webkit-text-fill-color: #FFFFFF;
+    background: none;
+  }
+  
+  .glass-panel,
+  .glass-panel-dark {
+    background: rgba(0, 0, 0, 0.8);
+    border: 2px solid #FFFFFF;
+  }
+}
+
+/* ========================================
+   LOADING STATES
+   ======================================== */
+
+.loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(255, 255, 255, 0.2), 
+    transparent);
+  animation: shimmer 2s infinite;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, 
+    rgba(255, 255, 255, 0.1) 25%, 
+    rgba(255, 255, 255, 0.2) 50%, 
+    rgba(255, 255, 255, 0.1) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* ========================================
+   CUSTOM CURSORS
+   ======================================== */
+
+.cursor-cosmic {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="%2300FFFF" opacity="0.8"/></svg>'), auto;
+}
+
+.cursor-gaming {
+  cursor: crosshair;
+}
+
+/* ========================================
+   ERROR Y SUCCESS STATES
+   ======================================== */
+
+.error-glow {
+  box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+  border-color: #FF0000;
+  animation: energyWave 1s infinite;
+}
+
+.success-glow {
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+  border-color: #00FF00;
+  animation: energyWave 1s infinite;
+}
+
+/* ========================================
+   GAME SPECIFIC STYLES
+   ======================================== */
+
+.game-ui {
+  pointer-events: none;
+}
+
+.game-ui > * {
+  pointer-events: auto;
+}
+
+.hud-element {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 2px solid rgba(0, 255, 255, 0.5);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.7);
+  box-shadow: 
+    0 4px 15px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.progress-bar-cosmic {
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 2px solid #00FFFF;
+  box-shadow: 
+    0 0 20px rgba(0, 255, 255, 0.3),
+    inset 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.progress-fill-cosmic {
+  background: linear-gradient(90deg, #00FFFF, #40E0D0, #48D1CC);
+  height: 100%;
+  border-radius: 8px;
+  box-shadow: 
+    inset 0 2px 4px rgba(255, 255, 255, 0.3),
+    0 0 10px #00FFFF;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ========================================
+   FINAL OPTIMIZATIONS
+   ======================================== */
+
+/* Reducir repaint y reflow */
+.no-select {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.gpu-accelerated {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Optimización para dispositivos móviles */
+@media (hover: none) and (pointer: coarse) {
+  .hover-lift:hover,
+  .hover-glow:hover,
+  .hover-rotate:hover {
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+/* Fin de los estilos globales */
