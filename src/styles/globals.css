@@ -1,497 +1,372 @@
 /* ========================================
-   CRASH WORM 3D - GLOBAL STYLES
-   Estilos globales premium para el juego
+   ESTILOS GLOBALES - globals.css
    ======================================== */
 
-/* Google Fonts Import */
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
-
-/* ========================================
-   RESET Y BASE STYLES
-   ======================================== */
-
+/* Reset y base */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-html {
-  font-size: 16px;
-  scroll-behavior: smooth;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-}
-
 body {
-  font-family: 'Orbitron', 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  line-height: 1.6;
-  color: #FFFFFF;
-  background: #000000;
+  font-family: 'Orbitron', 'Arial', sans-serif;
+  background: #000;
+  color: #fff;
   overflow: hidden;
-  position: relative;
-  width: 100vw;
-  height: 100vh;
-  margin: 0;
-  padding: 0;
   user-select: none;
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
 }
 
-#root {
+.app {
   width: 100vw;
   height: 100vh;
   position: relative;
+}
+
+/* ========================================
+   PANTALLA DE CARGA
+   ======================================== */
+
+.loading-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.loading-content {
+  text-align: center;
+  max-width: 600px;
+  padding: 2rem;
+}
+
+.game-title {
+  font-size: 3rem;
+  font-weight: bold;
+  background: linear-gradient(45deg, #ff6b35, #f7931e, #ffeb3b);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 3rem;
+  text-shadow: 0 0 30px rgba(255, 107, 53, 0.5);
+  animation: pulse 2s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.05); }
+}
+
+.loading-bar-container {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
   overflow: hidden;
+  margin: 2rem 0;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-/* ========================================
-   OPTIMIZACIONES DE RENDIMIENTO
-   ======================================== */
-
-* {
-  will-change: auto;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  perspective: 1000px;
-}
-
-canvas {
-  display: block;
-  image-rendering: optimizeQuality;
-  image-rendering: -moz-crisp-edges;
-  image-rendering: -webkit-optimize-contrast;
-  image-rendering: crisp-edges;
-  image-rendering: pixelated;
-}
-
-/* ========================================
-   ANIMACIONES KEYFRAMES
-   ======================================== */
-
-@keyframes gradientShift {
-  0%, 100% { 
-    background-position: 0% 50%; 
-    transform: scale(1);
-  }
-  50% { 
-    background-position: 100% 50%; 
-    transform: scale(1.02);
-  }
-}
-
-@keyframes cosmicPulse {
-  0%, 100% { 
-    transform: scale(1) rotate(-0.5deg);
-    filter: drop-shadow(0 0 20px rgba(0,255,255,0.6)) brightness(1);
-  }
-  50% { 
-    transform: scale(1.05) rotate(0.5deg);
-    filter: drop-shadow(0 0 40px rgba(64,224,208,0.8)) brightness(1.1);
-  }
-}
-
-@keyframes titleGlow {
-  0%, 100% { 
-    text-shadow: 
-      0 0 10px rgba(255,107,53,0.8),
-      0 0 20px rgba(255,140,66,0.6),
-      0 0 30px rgba(255,165,0,0.4);
-  }
-  50% { 
-    text-shadow: 
-      0 0 20px rgba(255,107,53,1),
-      0 0 40px rgba(255,140,66,0.8),
-      0 0 60px rgba(255,165,0,0.6);
-  }
-}
-
-@keyframes float {
-  0%, 100% { 
-    transform: translateY(0px) rotate(0deg); 
-  }
-  33% { 
-    transform: translateY(-8px) rotate(2deg); 
-  }
-  66% { 
-    transform: translateY(-4px) rotate(-1deg); 
-  }
-}
-
-@keyframes twinkle {
-  0%, 100% { 
-    opacity: 0.3; 
-    transform: scale(1); 
-  }
-  50% { 
-    opacity: 1; 
-    transform: scale(1.4); 
-  }
-}
-
-@keyframes shimmer {
-  0% { 
-    transform: translateX(-100%); 
-    opacity: 0;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% { 
-    transform: translateX(100%); 
-    opacity: 0;
-  }
-}
-
-@keyframes particleRise {
-  0% {
-    transform: translateY(100vh) scale(0);
-    opacity: 0;
-  }
-  10% {
-    opacity: 1;
-  }
-  90% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(-100vh) scale(1);
-    opacity: 0;
-  }
-}
-
-@keyframes orbitalRotation {
-  0% {
-    transform: rotate(0deg) translateX(50px) rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg) translateX(50px) rotate(-360deg);
-  }
-}
-
-@keyframes neonFlicker {
-  0%, 100% { 
-    text-shadow: 
-      0 0 5px currentColor,
-      0 0 10px currentColor,
-      0 0 15px currentColor;
-  }
-  50% { 
-    text-shadow: 
-      0 0 2px currentColor,
-      0 0 5px currentColor,
-      0 0 8px currentColor;
-  }
-}
-
-@keyframes holographicShift {
-  0% { 
-    background-position: 0% 50%;
-    filter: hue-rotate(0deg);
-  }
-  33% {
-    background-position: 100% 0%;
-    filter: hue-rotate(120deg);
-  }
-  66% {
-    background-position: 0% 100%;
-    filter: hue-rotate(240deg);
-  }
-  100% { 
-    background-position: 0% 50%;
-    filter: hue-rotate(360deg);
-  }
-}
-
-@keyframes energyWave {
-  0% {
-    box-shadow: 0 0 0 0 rgba(0,255,255,0.7);
-    transform: scale(1);
-  }
-  70% {
-    box-shadow: 0 0 0 20px rgba(0,255,255,0);
-    transform: scale(1.05);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(0,255,255,0);
-    transform: scale(1);
-  }
-}
-
-/* ========================================
-   CLASES DE UTILIDAD PARA ANIMACIONES
-   ======================================== */
-
-.animate-gradient {
-  animation: gradientShift 4s ease-in-out infinite;
-}
-
-.animate-pulse-cosmic {
-  animation: cosmicPulse 3s ease-in-out infinite;
-}
-
-.animate-float {
-  animation: float 6s ease-in-out infinite;
-}
-
-.animate-twinkle {
-  animation: twinkle 2s ease-in-out infinite;
-}
-
-.animate-shimmer {
+.loading-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #00ff88, #00ccff);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
   animation: shimmer 2s ease-in-out infinite;
 }
 
-.animate-neon-flicker {
-  animation: neonFlicker 0.5s ease-in-out infinite;
+@keyframes shimmer {
+  0% { box-shadow: 0 0 20px rgba(0, 255, 136, 0.5); }
+  50% { box-shadow: 0 0 30px rgba(0, 255, 136, 0.8); }
+  100% { box-shadow: 0 0 20px rgba(0, 255, 136, 0.5); }
 }
 
-.animate-holographic {
-  animation: holographicShift 8s ease-in-out infinite;
+.loading-text {
+  font-size: 1.2rem;
+  margin-bottom: 0.5rem;
+  color: #fff;
 }
 
-.animate-energy-wave {
-  animation: energyWave 2s infinite;
-}
-
-/* ========================================
-   EFECTOS DE TEXTO PREMIUM
-   ======================================== */
-
-.text-gradient-cosmic {
-  background: linear-gradient(45deg, #00FFFF, #40E0D0, #48D1CC, #87CEEB);
-  background-size: 300% 300%;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  animation: gradientShift 4s ease-in-out infinite;
-}
-
-.text-gradient-fire {
-  background: linear-gradient(45deg, #FF6B35, #FF8C42, #FFD700, #FFA500);
-  background-size: 300% 300%;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  animation: gradientShift 3s ease-in-out infinite;
-}
-
-.text-gradient-purple {
-  background: linear-gradient(45deg, #9932CC, #BA68C8, #CE93D8, #E1BEE7);
-  background-size: 300% 300%;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  animation: gradientShift 5s ease-in-out infinite;
-}
-
-.text-neon-cyan {
-  color: #00FFFF;
-  text-shadow: 
-    0 0 5px #00FFFF,
-    0 0 10px #00FFFF,
-    0 0 15px #00FFFF,
-    0 0 20px #00FFFF;
-  animation: neonFlicker 2s ease-in-out infinite;
-}
-
-.text-neon-pink {
-  color: #FF69B4;
-  text-shadow: 
-    0 0 5px #FF69B4,
-    0 0 10px #FF69B4,
-    0 0 15px #FF69B4,
-    0 0 20px #FF69B4;
-}
-
-.text-holographic {
-  background: linear-gradient(45deg, 
-    #ff0000, #ff8000, #ffff00, #80ff00, 
-    #00ff00, #00ff80, #00ffff, #0080ff, 
-    #0000ff, #8000ff, #ff00ff, #ff0080);
-  background-size: 400% 400%;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  animation: holographicShift 6s linear infinite;
+.loading-percentage {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #00ff88;
 }
 
 /* ========================================
-   EFECTOS DE GLASSMORPHISM
+   MENÚ PRINCIPAL
    ======================================== */
 
-.glass-panel {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 16px;
-  box-shadow: 
-    0 8px 32px 0 rgba(31, 38, 135, 0.37),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+.main-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.glass-panel-dark {
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  box-shadow: 
-    0 8px 32px 0 rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-
-/* ========================================
-   EFECTOS DE NEOMORPHISM
-   ======================================== */
-
-.neo-button {
-  background: linear-gradient(145deg, #2a2a3e, #232338);
-  box-shadow: 
-    20px 20px 60px #1e1e30,
-    -20px -20px 60px #36364c,
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  border: none;
-  border-radius: 20px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.neo-button:hover {
-  box-shadow: 
-    25px 25px 75px #1e1e30,
-    -25px -25px 75px #36364c,
-    inset 0 2px 0 rgba(255, 255, 255, 0.2);
-  transform: translateY(-2px);
-}
-
-.neo-button:active {
-  box-shadow: 
-    inset 20px 20px 60px #1e1e30,
-    inset -20px -20px 60px #36364c;
-  transform: translateY(0px);
-}
-
-/* ========================================
-   EFECTOS DE PARTÍCULAS Y COSMIC
-   ======================================== */
-
-.cosmic-bg {
-  position: relative;
-  overflow: hidden;
-}
-
-.cosmic-bg::before {
-  content: '';
+.menu-background {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background: 
-    radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
-    radial-gradient(circle at 40% 40%, rgba(120, 200, 255, 0.3) 0%, transparent 50%);
-  pointer-events: none;
-  z-index: -1;
+  background: linear-gradient(135deg, #0c0c0c 0%, #1a1a1a 50%, #0c0c0c 100%);
+  overflow: hidden;
 }
 
-.floating-particles {
+.stars {
   position: absolute;
   width: 100%;
   height: 100%;
-  overflow: hidden;
-  pointer-events: none;
+  background-image: 
+    radial-gradient(2px 2px at 20px 30px, #eee, transparent),
+    radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 90px 40px, #fff, transparent),
+    radial-gradient(1px 1px at 130px 80px, rgba(255,255,255,0.6), transparent),
+    radial-gradient(2px 2px at 160px 30px, #ddd, transparent);
+  background-repeat: repeat;
+  background-size: 200px 150px;
+  animation: move-stars 20s linear infinite;
 }
 
-.particle {
+@keyframes move-stars {
+  from { transform: translateY(0); }
+  to { transform: translateY(-200px); }
+}
+
+.nebula {
   position: absolute;
-  width: 2px;
-  height: 2px;
-  background: #00FFFF;
-  border-radius: 50%;
-  box-shadow: 0 0 6px #00FFFF;
-  animation: particleRise 8s linear infinite;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(ellipse at center, rgba(138, 43, 226, 0.1) 0%, transparent 70%);
+  animation: pulse-nebula 4s ease-in-out infinite alternate;
 }
 
-.particle:nth-child(2n) {
-  background: #FF69B4;
-  box-shadow: 0 0 6px #FF69B4;
-  animation-duration: 10s;
-  animation-delay: -2s;
+@keyframes pulse-nebula {
+  from { opacity: 0.3; }
+  to { opacity: 0.6; }
 }
 
-.particle:nth-child(3n) {
-  background: #FFD700;
-  box-shadow: 0 0 6px #FFD700;
-  animation-duration: 12s;
-  animation-delay: -4s;
+.menu-content {
+  position: relative;
+  text-align: center;
+  z-index: 10;
+  max-width: 500px;
+  padding: 2rem;
 }
 
-/* ========================================
-   EFECTOS DE HOVER AVANZADOS
-   ======================================== */
-
-.hover-lift {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.menu-content .game-title {
+  font-size: 3.5rem;
+  margin-bottom: 3rem;
 }
 
-.hover-lift:hover {
-  transform: translateY(-8px) scale(1.02);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+.menu-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 2rem;
 }
 
-.hover-glow {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.menu-option {
+  background: linear-gradient(45deg, rgba(255, 107, 53, 0.1), rgba(247, 147, 30, 0.1));
+  border: 2px solid rgba(255, 107, 53, 0.3);
+  color: #fff;
+  padding: 1rem 2rem;
+  font-size: 1.2rem;
+  font-weight: bold;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  backdrop-filter: blur(10px);
 }
 
-.hover-glow:hover {
-  box-shadow: 
-    0 0 20px rgba(0, 255, 255, 0.5),
-    0 0 40px rgba(0, 255, 255, 0.3),
-    0 0 60px rgba(0, 255, 255, 0.1);
+.menu-option:hover,
+.menu-option.selected {
+  background: linear-gradient(45deg, rgba(255, 107, 53, 0.3), rgba(247, 147, 30, 0.3));
+  border-color: #ff6b35;
+  box-shadow: 0 0 20px rgba(255, 107, 53, 0.5);
   transform: scale(1.05);
 }
 
-.hover-rotate {
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.hover-rotate:hover {
-  transform: rotate(5deg) scale(1.05);
+.menu-info {
+  font-size: 0.9rem;
+  opacity: 0.7;
+  line-height: 1.6;
 }
 
 /* ========================================
-   SCROLLBAR PERSONALIZADO
+   MENÚ DE PAUSA
    ======================================== */
 
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+.pause-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9997;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.3);
+.pause-overlay {
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pause-content {
+  text-align: center;
+  padding: 3rem;
+  background: linear-gradient(135deg, rgba(30, 60, 114, 0.9), rgba(42, 82, 152, 0.9));
+  border-radius: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  min-width: 400px;
+}
+
+.pause-content h2 {
+  font-size: 2.5rem;
+  margin-bottom: 2rem;
+  color: #ff6b35;
+  text-shadow: 0 0 20px rgba(255, 107, 53, 0.5);
+}
+
+.pause-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.pause-option {
+  background: linear-gradient(45deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 0.8rem 1.5rem;
+  font-size: 1.1rem;
+  font-weight: bold;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(5px);
+}
+
+.pause-option:hover,
+.pause-option.selected {
+  background: linear-gradient(45deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1));
+  border-color: #fff;
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+/* ========================================
+   UI DEL JUEGO
+   ======================================== */
+
+.game-ui {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 1000;
+  padding: 20px;
+  font-family: 'Orbitron', sans-serif;
+}
+
+/* HUD Elements */
+.hud-element {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.5));
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 10px;
+  padding: 10px 15px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 }
 
-::-webkit-scrollbar-thumb {
-  background: linear-gradient(45deg, #00FFFF, #FF69B4);
+.score-display {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #00ff88;
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+}
+
+.health-bar {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 200px;
+  height: 20px;
+  background: rgba(255, 0, 0, 0.3);
+  border: 2px solid #fff;
   border-radius: 10px;
-  box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+  overflow: hidden;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(45deg, #40E0D0, #FF1493);
-  box-shadow: 0 0 15px rgba(0, 255, 255, 0.7);
+.health-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff0000, #ffff00, #00ff00);
+  transition: width 0.3s ease;
+  border-radius: 8px;
+}
+
+.minimap {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: 150px;
+  height: 150px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 15px;
+  backdrop-filter: blur(10px);
+}
+
+.player-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  background: #ff0000;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 10px #ff0000;
+}
+
+.controls-info {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  font-size: 0.9rem;
+  opacity: 0.8;
+  line-height: 1.4;
 }
 
 /* ========================================
@@ -499,261 +374,170 @@ canvas {
    ======================================== */
 
 @media (max-width: 768px) {
-  html {
-    font-size: 14px;
+  .game-title {
+    font-size: 2rem;
   }
   
-  .text-gradient-cosmic,
-  .text-gradient-fire,
-  .text-gradient-purple {
-    font-size: clamp(2rem, 8vw, 4rem);
+  .menu-option {
+    padding: 0.8rem 1.5rem;
+    font-size: 1rem;
   }
   
-  .glass-panel,
-  .glass-panel-dark {
-    border-radius: 12px;
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
+  .health-bar {
+    width: 150px;
   }
   
-  .neo-button {
-    border-radius: 15px;
-    padding: 12px 24px;
+  .minimap {
+    width: 120px;
+    height: 120px;
   }
 }
 
 @media (max-width: 480px) {
-  html {
-    font-size: 12px;
+  .game-title {
+    font-size: 1.5rem;
   }
   
-  .particle {
-    width: 1px;
-    height: 1px;
+  .loading-content,
+  .menu-content,
+  .pause-content {
+    padding: 1rem;
   }
   
-  .glass-panel,
-  .glass-panel-dark {
-    border-radius: 10px;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+  .controls-info {
+    font-size: 0.8rem;
   }
 }
 
 /* ========================================
-   DARK MODE UTILITIES
+   UTILIDADES
    ======================================== */
 
-@media (prefers-color-scheme: dark) {
-  .auto-dark {
-    background: #1a1a2e;
-    color: #ffffff;
-  }
-}
-
-/* ========================================
-   PRINT STYLES
-   ======================================== */
-
-@media print {
-  * {
-    background: transparent !important;
-    color: black !important;
-    box-shadow: none !important;
-    text-shadow: none !important;
-  }
-  
-  .no-print {
-    display: none !important;
-  }
-}
-
-/* ========================================
-   ACCESIBILIDAD
-   ======================================== */
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-/* ========================================
-   FOCUS STYLES
-   ======================================== */
-
-button:focus,
-input:focus,
-select:focus,
-textarea:focus {
-  outline: 2px solid #00FFFF;
-  outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(0, 255, 255, 0.3);
-}
-
-/* ========================================
-   HIGH CONTRAST MODE
-   ======================================== */
-
-@media (prefers-contrast: high) {
-  .text-gradient-cosmic,
-  .text-gradient-fire,
-  .text-gradient-purple {
-    -webkit-text-fill-color: #FFFFFF;
-    background: none;
-  }
-  
-  .glass-panel,
-  .glass-panel-dark {
-    background: rgba(0, 0, 0, 0.8);
-    border: 2px solid #FFFFFF;
-  }
-}
-
-/* ========================================
-   LOADING STATES
-   ======================================== */
-
-.loading {
-  position: relative;
-  overflow: hidden;
-}
-
-.loading::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, 
-    transparent, 
-    rgba(255, 255, 255, 0.2), 
-    transparent);
-  animation: shimmer 2s infinite;
-}
-
-.skeleton {
-  background: linear-gradient(90deg, 
-    rgba(255, 255, 255, 0.1) 25%, 
-    rgba(255, 255, 255, 0.2) 50%, 
-    rgba(255, 255, 255, 0.1) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-}
-
-/* ========================================
-   CUSTOM CURSORS
-   ======================================== */
-
-.cursor-cosmic {
-  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="%2300FFFF" opacity="0.8"/></svg>'), auto;
-}
-
-.cursor-gaming {
-  cursor: crosshair;
-}
-
-/* ========================================
-   ERROR Y SUCCESS STATES
-   ======================================== */
-
-.error-glow {
-  box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
-  border-color: #FF0000;
-  animation: energyWave 1s infinite;
-}
-
-.success-glow {
-  box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
-  border-color: #00FF00;
-  animation: energyWave 1s infinite;
-}
-
-/* ========================================
-   GAME SPECIFIC STYLES
-   ======================================== */
-
-.game-ui {
-  pointer-events: none;
-}
-
-.game-ui > * {
-  pointer-events: auto;
-}
-
-.hud-element {
+.glass-effect {
+  background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 2px solid rgba(0, 255, 255, 0.5);
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.7);
-  box-shadow: 
-    0 4px 15px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-
-.progress-bar-cosmic {
-  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 10px;
-  overflow: hidden;
-  border: 2px solid #00FFFF;
-  box-shadow: 
-    0 0 20px rgba(0, 255, 255, 0.3),
-    inset 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
-.progress-fill-cosmic {
-  background: linear-gradient(90deg, #00FFFF, #40E0D0, #48D1CC);
-  height: 100%;
-  border-radius: 8px;
-  box-shadow: 
-    inset 0 2px 4px rgba(255, 255, 255, 0.3),
-    0 0 10px #00FFFF;
-  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+.neon-glow {
+  box-shadow: 0 0 20px currentColor;
+  text-shadow: 0 0 10px currentColor;
+}
+
+.fade-in {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
 }
 
 /* ========================================
-   FINAL OPTIMIZATIONS
+   SCROLL BAR PERSONALIZADO
    ======================================== */
 
-/* Reducir repaint y reflow */
-.no-select {
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
+::-webkit-scrollbar {
+  width: 8px;
 }
 
-.gpu-accelerated {
-  transform: translateZ(0);
-  will-change: transform;
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
 }
 
-/* Optimización para dispositivos móviles */
-@media (hover: none) and (pointer: coarse) {
-  .hover-lift:hover,
-  .hover-glow:hover,
-  .hover-rotate:hover {
-    transform: none;
-    box-shadow: none;
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #ff6b35, #f7931e);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #f7931e, #ff6b35);
+}
+
+/* ========================================
+   CONFIGURACIONES DEL JUEGO
+   ======================================== */
+
+/* Variables CSS para temas */
+:root {
+  --primary-color: #ff6b35;
+  --secondary-color: #f7931e;
+  --success-color: #00ff88;
+  --danger-color: #ff4757;
+  --warning-color: #ffeb3b;
+  --info-color: #00ccff;
+  
+  --bg-primary: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+  --bg-secondary: linear-gradient(135deg, #0c0c0c 0%, #1a1a1a 50%, #0c0c0c 100%);
+  
+  --glass-bg: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  
+  --shadow-light: 0 4px 15px rgba(0, 0, 0, 0.1);
+  --shadow-medium: 0 8px 25px rgba(0, 0, 0, 0.3);
+  --shadow-heavy: 0 20px 40px rgba(0, 0, 0, 0.5);
+  
+  --border-radius-small: 5px;
+  --border-radius-medium: 10px;
+  --border-radius-large: 20px;
+  
+  --transition-fast: 0.2s ease;
+  --transition-medium: 0.3s ease;
+  --transition-slow: 0.5s ease;
+}
+
+/* Tema oscuro (por defecto) */
+.theme-dark {
+  --text-primary: #ffffff;
+  --text-secondary: #cccccc;
+  --text-muted: #888888;
+}
+
+/* Tema claro (opcional) */
+.theme-light {
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+  --bg-primary: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+/* ========================================
+   ANIMACIONES PERSONALIZADAS
+   ======================================== */
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes bounce {
+  0%, 20%, 53%, 80%, 100% { transform: translate3d(0,0,0); }
+  40%, 43% { transform: translate3d(0,-20px,0); }
+  70% { transform: translate3d(0,-10px,0); }
+  90% { transform: translate3d(0,-4px,0); }
+}
+
+@keyframes glow {
+  0%, 100% { 
+    text-shadow: 0 0 5px currentColor, 0 0 10px currentColor, 0 0 15px currentColor;
+  }
+  50% { 
+    text-shadow: 0 0 10px currentColor, 0 0 20px currentColor, 0 0 30px currentColor;
   }
 }
-
-/* Fin de los estilos globales */
