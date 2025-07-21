@@ -1,0 +1,435 @@
+# ========================================
+# 🚀 CRASH WORM 3D - CI/CD PIPELINE SEGURO
+# Deploy workflow con protección anti-hacking
+# ========================================
+
+name: 🚀 Secure Deploy Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+
+env:
+  NODE_VERSION: '20.x'
+  DOCKER_REGISTRY: ghcr.io
+  IMAGE_NAME: crash-worm-3d
+
+# ========================================
+# 🛡️ JOBS DE SEGURIDAD Y DEPLOYMENT
+# ========================================
+
+jobs:
+  # ========================================
+  # 🔒 ANÁLISIS DE SEGURIDAD
+  # ========================================
+  security-audit:
+    name: 🔒 Security Audit
+    runs-on: ubuntu-latest
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🔧 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: 📦 Install dependencies
+      run: |
+        npm ci
+        cd server && npm ci
+        
+    - name: 🛡️ NPM Security Audit
+      run: |
+        echo "🔍 Frontend security audit..."
+        npm audit --audit-level moderate
+        echo "🔍 Backend security audit..."
+        cd server && npm audit --audit-level moderate
+        
+    - name: 🕵️ CodeQL Analysis
+      uses: github/codeql-action/init@v3
+      with:
+        languages: javascript
+        
+    - name: 🔍 Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      
+    - name: 🛡️ OWASP Dependency Check
+      uses: dependency-check/Dependency-Check_Action@main
+      with:
+        project: 'crash-worm-3d'
+        path: '.'
+        format: 'HTML'
+        
+    - name: 📊 Upload security results
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports
+        path: reports/
+
+  # ========================================
+  # 🧪 TESTS DE CALIDAD
+  # ========================================
+  quality-tests:
+    name: 🧪 Quality Tests
+    runs-on: ubuntu-latest
+    needs: security-audit
+    strategy:
+      matrix:
+        node-version: ['18.x', '20.x']
+        
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🔧 Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        
+    - name: 📦 Install dependencies
+      run: |
+        npm ci
+        cd server && npm ci
+        
+    - name: 🧪 Run frontend tests
+      run: |
+        npm run test:coverage
+        
+    - name: 🧪 Run backend tests
+      run: |
+        cd server
+        npm run test:coverage
+        
+    - name: 🔍 ESLint security rules
+      run: |
+        npm run lint:security
+        
+    - name: 📊 Upload coverage reports
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./coverage/lcov.info,./server/coverage/lcov.info
+
+  # ========================================
+  # 🏗️ BUILD MULTI-STAGE
+  # ========================================
+  build:
+    name: 🏗️ Build Application
+    runs-on: ubuntu-latest
+    needs: [security-audit, quality-tests]
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🔧 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: 📦 Install dependencies
+      run: npm ci
+      
+    - name: 🏗️ Build frontend
+      run: |
+        npm run build
+        echo "✅ Frontend build completed"
+        
+    - name: 📦 Build server dependencies
+      run: |
+        cd server
+        npm ci --production
+        echo "✅ Server dependencies installed"
+        
+    - name: 🐳 Setup Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: 🔐 Login to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.DOCKER_REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: 🏷️ Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+          
+    - name: 🏗️ Build and push Docker image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          NODE_ENV=production
+          BUILD_DATE=${{ github.event.head_commit.timestamp }}
+          VCS_REF=${{ github.sha }}
+
+  # ========================================
+  # 🔒 TESTS DE PENETRACIÓN
+  # ========================================
+  penetration-tests:
+    name: 🔒 Penetration Tests
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐳 Start test environment
+      run: |
+        docker-compose -f docker-compose.test.yml up -d
+        sleep 30
+        
+    - name: 🔍 OWASP ZAP Baseline Scan
+      uses: zaproxy/action-baseline@v0.10.0
+      with:
+        target: 'http://localhost:3000'
+        rules_file_name: '.zap/rules.tsv'
+        
+    - name: 🛡️ Nuclei vulnerability scan
+      run: |
+        docker run --rm -v $(pwd):/nuclei projectdiscovery/nuclei:latest \
+          -t exposed-panels,vulnerabilities,misconfiguration \
+          -target http://localhost:3000 \
+          -o /nuclei/nuclei-report.txt
+          
+    - name: 📊 Upload penetration test results
+      uses: actions/upload-artifact@v4
+      with:
+        name: penetration-test-results
+        path: |
+          nuclei-report.txt
+          zap-report.html
+
+  # ========================================
+  # 🚀 DEPLOY A STAGING
+  # ========================================
+  deploy-staging:
+    name: 🚀 Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build, penetration-tests]
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🔧 Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+        
+    - name: 🔐 Configure kubectl
+      run: |
+        echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+        
+    - name: 🚀 Deploy to Kubernetes
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl set image deployment/crash-worm-frontend \
+          frontend=${{ env.DOCKER_REGISTRY }}/${{ github.repository }}:${{ github.sha }} \
+          -n crash-worm-staging
+        kubectl set image deployment/crash-worm-backend \
+          backend=${{ env.DOCKER_REGISTRY }}/${{ github.repository }}:${{ github.sha }} \
+          -n crash-worm-staging
+        kubectl rollout status deployment/crash-worm-frontend -n crash-worm-staging
+        kubectl rollout status deployment/crash-worm-backend -n crash-worm-staging
+        
+    - name: ✅ Verify deployment
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl get pods -n crash-worm-staging
+        kubectl get services -n crash-worm-staging
+
+  # ========================================
+  # 🌟 DEPLOY A PRODUCCIÓN
+  # ========================================
+  deploy-production:
+    name: 🌟 Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build, penetration-tests]
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🔧 Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+        
+    - name: 🔐 Configure kubectl
+      run: |
+        echo "${{ secrets.KUBE_CONFIG_PRODUCTION }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+        
+    - name: 🌟 Blue-Green Deployment
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Deploy to green environment
+        kubectl set image deployment/crash-worm-frontend-green \
+          frontend=${{ env.DOCKER_REGISTRY }}/${{ github.repository }}:${{ github.sha }} \
+          -n crash-worm-production
+        kubectl set image deployment/crash-worm-backend-green \
+          backend=${{ env.DOCKER_REGISTRY }}/${{ github.repository }}:${{ github.sha }} \
+          -n crash-worm-production
+          
+        # Wait for green deployment
+        kubectl rollout status deployment/crash-worm-frontend-green -n crash-worm-production
+        kubectl rollout status deployment/crash-worm-backend-green -n crash-worm-production
+        
+        # Switch traffic to green
+        kubectl patch service crash-worm-frontend-service \
+          -p '{"spec":{"selector":{"version":"green"}}}' \
+          -n crash-worm-production
+        kubectl patch service crash-worm-backend-service \
+          -p '{"spec":{"selector":{"version":"green"}}}' \
+          -n crash-worm-production
+          
+        # Verify health
+        sleep 60
+        curl -f https://api.crashworm3d.com/health || exit 1
+        
+    - name: 📱 Notify deployment
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+
+  # ========================================
+  # 📊 POST-DEPLOY MONITORING
+  # ========================================
+  monitoring:
+    name: 📊 Post-Deploy Monitoring
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always()
+    
+    steps:
+    - name: 📊 Health Check
+      run: |
+        if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+          URL="https://api.crashworm3d.com"
+        else
+          URL="https://staging-api.crashworm3d.com"
+        fi
+        
+        echo "🩺 Health checking $URL..."
+        for i in {1..5}; do
+          if curl -f "$URL/health"; then
+            echo "✅ Health check passed"
+            break
+          fi
+          echo "⏳ Waiting 30s before retry $i/5..."
+          sleep 30
+        done
+        
+    - name: 📈 Performance Test
+      run: |
+        if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+          URL="https://crashworm3d.com"
+        else
+          URL="https://staging.crashworm3d.com"
+        fi
+        
+        echo "⚡ Performance testing $URL..."
+        docker run --rm \
+          -v $(pwd)/artillery:/artillery \
+          artilleryio/artillery:latest \
+          run /artillery/load-test.yml \
+          --target $URL
+          
+    - name: 🚨 Setup monitoring alerts
+      run: |
+        echo "🚨 Configuring post-deploy alerts..."
+        # Aquí configurarías alertas con tu sistema de monitoreo
+        # (Prometheus, Grafana, DataDog, etc.)
+
+# ========================================
+# 🔔 NOTIFICACIONES
+# ========================================
+  notifications:
+    name: 🔔 Notifications
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production, monitoring]
+    if: always()
+    
+    steps:
+    - name: 📧 Email notification
+      if: failure()
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: smtp.gmail.com
+        server_port: 587
+        username: ${{ secrets.EMAIL_USERNAME }}
+        password: ${{ secrets.EMAIL_PASSWORD }}
+        subject: "🚨 CRASH WORM 3D - Deployment Failed"
+        body: |
+          Deployment failed for commit ${{ github.sha }}
+          
+          Repository: ${{ github.repository }}
+          Branch: ${{ github.ref }}
+          Actor: ${{ github.actor }}
+          
+          Check the actions tab for details.
+        to: ${{ secrets.ADMIN_EMAIL }}
+        
+    - name: 📱 Discord notification
+      if: success()
+      run: |
+        curl -X POST "${{ secrets.DISCORD_WEBHOOK }}" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "embeds": [{
+              "title": "🚀 Deployment Successful",
+              "description": "CRASH WORM 3D deployed successfully",
+              "color": 3066993,
+              "fields": [
+                {"name": "Commit", "value": "${{ github.sha }}", "inline": true},
+                {"name": "Branch", "value": "${{ github.ref }}", "inline": true},
+                {"name": "Actor", "value": "${{ github.actor }}", "inline": true}
+              ],
+              "timestamp": "${{ github.event.head_commit.timestamp }}"
+            }]
+          }'
