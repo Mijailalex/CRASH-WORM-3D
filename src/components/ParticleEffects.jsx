@@ -14,63 +14,74 @@ import { useAudioManager } from '../hooks/useAudioManager';
 
 // ========================================
 // COMPONENTE PARTICLE EFFECTS
+// Ubicación: src/components/ParticleEffects.jsx
 // ========================================
 
 export function ParticleEffects({ effects = [] }) {
   return (
     <group>
       {effects.map((effect, index) => (
-        <ParticleSystem key={index} {...effect} />
+        <ParticleSystem key={`${effect.type}-${index}`} {...effect} />
       ))}
     </group>
   );
 }
 
-function ParticleSystem({ type, position, count = 50, color = '#ffffff' }) {
-  const meshRef = useRef();
-  const particlesRef = useRef();
+function ParticleSystem({ type, position, count = 100, color = '#ffffff' }) {
+  const pointsRef = useRef();
+  const [particles, setParticles] = useState([]);
 
   useEffect(() => {
-    if (!meshRef.current) return;
+    const generateParticles = () => {
+      const newParticles = [];
+      
+      for (let i = 0; i < count; i++) {
+        newParticles.push({
+          position: [
+            position[0] + (Math.random() - 0.5) * 2,
+            position[1] + (Math.random() - 0.5) * 2,
+            position[2] + (Math.random() - 0.5) * 2
+          ],
+          velocity: [
+            (Math.random() - 0.5) * 0.1,
+            Math.random() * 0.1,
+            (Math.random() - 0.5) * 0.1
+          ],
+          life: 1.0,
+          decay: Math.random() * 0.02 + 0.01
+        });
+      }
+      
+      setParticles(newParticles);
+    };
 
-    const geometry = new THREE.BufferGeometry();
-    const positions = new Float32Array(count * 3);
-    const velocities = new Float32Array(count * 3);
+    generateParticles();
+  }, [count, position]);
 
-    for (let i = 0; i < count; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 2;
-      positions[i * 3 + 1] = (Math.random() - 0.5) * 2;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 2;
-
-      velocities[i * 3] = (Math.random() - 0.5) * 0.1;
-      velocities[i * 3 + 1] = Math.random() * 0.1;
-      velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.1;
-    }
-
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    particlesRef.current = { positions, velocities };
-  }, [count]);
-
-  useFrame((_, delta) => {
-    if (!meshRef.current || !particlesRef.current) return;
-
-    const { positions, velocities } = particlesRef.current;
-
-    for (let i = 0; i < count; i++) {
-      positions[i * 3] += velocities[i * 3];
-      positions[i * 3 + 1] += velocities[i * 3 + 1];
-      positions[i * 3 + 2] += velocities[i * 3 + 2];
-
-      velocities[i * 3 + 1] -= 0.001; // Gravedad
-    }
-
-    meshRef.current.geometry.attributes.position.needsUpdate = true;
+  useFrame(() => {
+    setParticles(prev => prev.map(particle => ({
+      ...particle,
+      position: [
+        particle.position[0] + particle.velocity[0],
+        particle.position[1] + particle.velocity[1],
+        particle.position[2] + particle.velocity[2]
+      ],
+      life: Math.max(0, particle.life - particle.decay)
+    })).filter(p => p.life > 0));
   });
 
   return (
-    <points ref={meshRef} position={position}>
-      <bufferGeometry />
-      <pointsMaterial color={color} size={0.1} />
-    </points>
+    <group>
+      {particles.map((particle, index) => (
+        <mesh key={index} position={particle.position}>
+          <sphereGeometry args={[0.05, 8, 8]} />
+          <meshBasicMaterial 
+            color={color} 
+            opacity={particle.life} 
+            transparent 
+          />
+        </mesh>
+      ))}
+    </group>
   );
 }

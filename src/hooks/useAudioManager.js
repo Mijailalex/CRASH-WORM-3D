@@ -1,174 +1,180 @@
+
+// ========================================
+// HOOKS PERSONALIZADOS COMPLETOS
+// useGameEngine, useAudioManager, useNetworkSync
+// ========================================
+
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { GameEngine } from '../core/GameEngine';
+import { useGame } from '../context/GameContext';
+import * as Tone from 'tone';
+
 // ========================================
 // HOOK useAudioManager
+// Ubicación: src/hooks/useAudioManager.js
 // ========================================
 
 export function useAudioManager() {
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [isEnabled, setIsEnabled] = useState(true);
-  const audioContextRef = useRef();
-  const soundsRef = useRef(new Map());
-  const { state } = useGame();
+  const [isAudioInitialized, setIsAudioInitialized] = useState(false);
+  const [volume, setVolume] = useState(0.7);
+  const [isMuted, setIsMuted] = useState(false);
+  const synthsRef = useRef({});
+  const soundsRef = useRef({});
+  const currentMusicRef = useRef(null);
 
-  // Inicializar contexto de audio
+  // Inicializar Tone.js
   useEffect(() => {
-    const initializeAudio = async () => {
+    const initAudio = async () => {
       try {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-        
-        // Precargar sonidos básicos
-        await loadBasicSounds();
-        
-        setIsInitialized(true);
+        await Tone.start();
+        setupSynths();
+        setIsAudioInitialized(true);
         console.log('🔊 AudioManager inicializado');
       } catch (error) {
-        console.warn('⚠️ Audio no disponible:', error);
-        setIsEnabled(false);
+        console.error('❌ Error inicializando audio:', error);
       }
     };
 
-    initializeAudio();
+    initAudio();
 
     return () => {
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
+      if (currentMusicRef.current) {
+        currentMusicRef.current.dispose();
       }
+      Object.values(synthsRef.current).forEach(synth => synth.dispose());
     };
   }, []);
 
-  const loadBasicSounds = async () => {
-    const basicSounds = {
-      jump: generateJumpSound(),
-      collectGem: generateCollectSound(),
-      hit: generateHitSound(),
-      damage: generateDamageSound()
+  // Configurar sintetizadores
+  const setupSynths = useCallback(() => {
+    synthsRef.current = {
+      jump: new Tone.Synth({
+        oscillator: { type: 'sine' },
+        envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.1 }
+      }).toDestination(),
+
+      collect: new Tone.Synth({
+        oscillator: { type: 'triangle' },
+        envelope: { attack: 0.01, decay: 0.3, sustain: 0, release: 0.2 }
+      }).toDestination(),
+
+      hit: new Tone.NoiseSynth({
+        noise: { type: 'pink' },
+        envelope: { attack: 0.01, decay: 0.1, sustain: 0 }
+      }).toDestination(),
+
+      ambient: new Tone.FMSynth({
+        harmonicity: 3,
+        modulationIndex: 10,
+        oscillator: { type: 'sine' },
+        envelope: { attack: 0.2, decay: 0.3, sustain: 0.1, release: 1.2 }
+      }).toDestination()
     };
 
-    for (const [name, buffer] of Object.entries(basicSounds)) {
-      soundsRef.current.set(name, buffer);
-    }
-  };
+    // Configurar volumen inicial
+    Object.values(synthsRef.current).forEach(synth => {
+      synth.volume.value = Tone.gainToDb(volume);
+    });
+  }, [volume]);
 
-  // Generadores de sonido procedural usando Tone.js concepts
-  const generateJumpSound = () => {
-    if (!audioContextRef.current) return null;
-    
-    const length = 0.3;
-    const sampleRate = audioContextRef.current.sampleRate;
-    const buffer = audioContextRef.current.createBuffer(1, length * sampleRate, sampleRate);
-    const data = buffer.getChannelData(0);
-
-    for (let i = 0; i < data.length; i++) {
-      const t = i / sampleRate;
-      const freq = 400 + (200 * Math.exp(-t * 3));
-      data[i] = Math.sin(2 * Math.PI * freq * t) * Math.exp(-t * 2) * 0.3;
-    }
-
-    return buffer;
-  };
-
-  const generateCollectSound = () => {
-    if (!audioContextRef.current) return null;
-    
-    const length = 0.2;
-    const sampleRate = audioContextRef.current.sampleRate;
-    const buffer = audioContextRef.current.createBuffer(1, length * sampleRate, sampleRate);
-    const data = buffer.getChannelData(0);
-
-    for (let i = 0; i < data.length; i++) {
-      const t = i / sampleRate;
-      const freq = 800 + (400 * t);
-      data[i] = Math.sin(2 * Math.PI * freq * t) * (1 - t / length) * 0.4;
-    }
-
-    return buffer;
-  };
-
-  const generateHitSound = () => {
-    if (!audioContextRef.current) return null;
-    
-    const length = 0.15;
-    const sampleRate = audioContextRef.current.sampleRate;
-    const buffer = audioContextRef.current.createBuffer(1, length * sampleRate, sampleRate);
-    const data = buffer.getChannelData(0);
-
-    for (let i = 0; i < data.length; i++) {
-      const t = i / sampleRate;
-      const noise = (Math.random() - 0.5) * 2;
-      const envelope = Math.exp(-t * 10);
-      data[i] = noise * envelope * 0.3;
-    }
-
-    return buffer;
-  };
-
-  const generateDamageSound = () => {
-    if (!audioContextRef.current) return null;
-    
-    const length = 0.4;
-    const sampleRate = audioContextRef.current.sampleRate;
-    const buffer = audioContextRef.current.createBuffer(1, length * sampleRate, sampleRate);
-    const data = buffer.getChannelData(0);
-
-    for (let i = 0; i < data.length; i++) {
-      const t = i / sampleRate;
-      const freq = 200 - (50 * t);
-      const envelope = Math.exp(-t * 2);
-      data[i] = Math.sin(2 * Math.PI * freq * t) * envelope * 0.5;
-    }
-
-    return buffer;
-  };
-
+  // Funciones de audio
   const playSound = useCallback((soundType, options = {}) => {
-    if (!isInitialized || !isEnabled || !audioContextRef.current) return;
+    if (!isAudioInitialized || isMuted) return;
 
-    const sound = soundsRef.current.get(soundType);
-    if (!sound) {
-      console.warn(`Sound ${soundType} not found`);
-      return;
+    const synth = synthsRef.current[soundType];
+    if (!synth) return;
+
+    switch (soundType) {
+      case 'jump':
+        synth.triggerAttackRelease('C5', '16n', Tone.now(), 0.8);
+        break;
+      case 'collect':
+        const collectNotes = ['C6', 'E6', 'G6'];
+        collectNotes.forEach((note, i) => {
+          synth.triggerAttackRelease(note, '32n', Tone.now() + i * 0.05, 0.6);
+        });
+        break;
+      case 'hit':
+        synth.triggerAttackRelease('8n', Tone.now(), 0.5);
+        break;
+      case 'ambient':
+        if (options.note) {
+          synth.triggerAttackRelease(options.note, options.duration || '2n', Tone.now(), 0.3);
+        }
+        break;
+    }
+  }, [isAudioInitialized, isMuted]);
+
+  const playMusic = useCallback((type = 'background') => {
+    if (!isAudioInitialized || isMuted) return;
+
+    if (currentMusicRef.current) {
+      currentMusicRef.current.stop();
+      currentMusicRef.current.dispose();
     }
 
-    try {
-      const source = audioContextRef.current.createBufferSource();
-      const gainNode = audioContextRef.current.createGain();
-      
-      source.buffer = sound;
-      gainNode.gain.value = (options.volume || 1.0) * (state.settings?.audio?.sfxVolume || 0.7);
-      
-      source.connect(gainNode);
-      gainNode.connect(audioContextRef.current.destination);
-      
-      source.start();
-      
-      return source;
-    } catch (error) {
-      console.error('Error playing sound:', error);
-    }
-  }, [isInitialized, isEnabled, state.settings?.audio?.sfxVolume]);
+    // Música procedural simple
+    const synth = new Tone.PolySynth(Tone.Synth).toDestination();
+    const sequence = new Tone.Sequence((time, note) => {
+      synth.triggerAttackRelease(note, '8n', time, 0.2);
+    }, generateMelody(type), '8n');
 
-  const setListenerPosition = useCallback((position) => {
-    if (!audioContextRef.current || !audioContextRef.current.listener) return;
-    
-    const listener = audioContextRef.current.listener;
-    if (listener.positionX) {
-      listener.positionX.value = position.x;
-      listener.positionY.value = position.y;
-      listener.positionZ.value = position.z;
+    sequence.start(0);
+    Tone.Transport.start();
+
+    currentMusicRef.current = { synth, sequence };
+  }, [isAudioInitialized, isMuted]);
+
+  const stopMusic = useCallback(() => {
+    if (currentMusicRef.current) {
+      currentMusicRef.current.sequence.stop();
+      Tone.Transport.stop();
+      currentMusicRef.current.synth.dispose();
+      currentMusicRef.current = null;
     }
   }, []);
 
-  const playBackgroundMusic = useCallback((trackName, options = {}) => {
-    // Implementación básica de música de fondo
-    // En un proyecto real, cargarías archivos de audio aquí
-    console.log(`Playing background music: ${trackName}`, options);
+  const generateMelody = useCallback((type) => {
+    const scales = {
+      background: ['C4', 'E4', 'G4', 'A4', 'C5'],
+      victory: ['C5', 'E5', 'G5', 'C6'],
+      danger: ['C3', 'Eb3', 'F#3', 'G3']
+    };
+
+    const scale = scales[type] || scales.background;
+    const melody = [];
+
+    for (let i = 0; i < 16; i++) {
+      melody.push(scale[Math.floor(Math.random() * scale.length)]);
+    }
+
+    return melody;
   }, []);
+
+  // Control de volumen
+  const updateVolume = useCallback((newVolume) => {
+    setVolume(newVolume);
+    const dbValue = Tone.gainToDb(newVolume);
+    Object.values(synthsRef.current).forEach(synth => {
+      synth.volume.value = dbValue;
+    });
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    setIsMuted(prev => !prev);
+    if (isMuted) {
+      Tone.Transport.stop();
+    }
+  }, [isMuted]);
 
   return {
-    isInitialized,
-    isEnabled,
-    setIsEnabled,
+    isAudioInitialized,
     playSound,
-    setListenerPosition,
-    playBackgroundMusic
+    playMusic,
+    stopMusic,
+    volume,
+    updateVolume,
+    isMuted,
+    toggleMute
   };
 }

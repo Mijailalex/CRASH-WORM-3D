@@ -14,100 +14,57 @@ import { useAudioManager } from '../hooks/useAudioManager';
 
 // ========================================
 // COMPONENTE GAME UI
+// Ubicación: src/components/GameUI.jsx
 // ========================================
 
 export function GameUI() {
   const { state } = useGame();
+  const { score, health, level, lives, timeRemaining } = state;
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      pointerEvents: 'none',
-      zIndex: 1000,
-      padding: '20px',
-      color: 'white',
-      fontFamily: 'Arial, sans-serif'
-    }}>
+    <div className="game-ui">
       {/* HUD Principal */}
-      <div style={{
-        position: 'absolute',
-        top: '20px',
-        left: '20px',
-        pointerEvents: 'auto'
-      }}>
-        <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-          Score: {state.game?.score || 0}
+      <div className="hud-top">
+        <div className="score-display">
+          <span className="label">Score:</span>
+          <span className="value">{score.toLocaleString()}</span>
         </div>
-        <div style={{ fontSize: '18px' }}>
-          Gems: {state.player?.gems || 0}
+        
+        <div className="level-display">
+          <span className="label">Level:</span>
+          <span className="value">{level}</span>
         </div>
-        <div style={{ fontSize: '18px' }}>
-          Lives: {state.player?.lives || 3}
+        
+        <div className="time-display">
+          <span className="label">Time:</span>
+          <span className="value">{Math.floor(timeRemaining)}s</span>
         </div>
       </div>
 
       {/* Barra de Salud */}
-      <div style={{
-        position: 'absolute',
-        top: '20px',
-        right: '20px',
-        width: '200px',
-        height: '20px',
-        backgroundColor: 'rgba(255, 0, 0, 0.3)',
-        border: '2px solid white',
-        borderRadius: '10px',
-        overflow: 'hidden'
-      }}>
-        <div style={{
-          width: `${(state.player?.health || 100)}%`,
-          height: '100%',
-          backgroundColor: '#00ff00',
-          transition: 'width 0.3s ease'
-        }} />
+      <div className="health-bar">
+        <div className="health-bg">
+          <div 
+            className="health-fill"
+            style={{ width: `${(health / 100) * 100}%` }}
+          />
+        </div>
+        <span className="health-text">{health}/100</span>
       </div>
 
-      {/* Minimapa */}
-      <div style={{
-        position: 'absolute',
-        bottom: '20px',
-        right: '20px',
-        width: '150px',
-        height: '150px',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        border: '2px solid white',
-        borderRadius: '10px'
-      }}>
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          width: '4px',
-          height: '4px',
-          backgroundColor: '#ff0000',
-          borderRadius: '50%',
-          transform: 'translate(-50%, -50%)'
-        }} />
+      {/* Vidas */}
+      <div className="lives-display">
+        {Array.from({ length: lives }, (_, i) => (
+          <div key={i} className="life-icon">♥</div>
+        ))}
       </div>
 
       {/* Controles */}
-      <div style={{
-        position: 'absolute',
-        bottom: '20px',
-        left: '20px',
-        fontSize: '14px',
-        opacity: 0.7
-      }}>
-        <div>WASD / Arrows: Move</div>
+      <div className="controls-hint">
+        <div>WASD/Arrows: Move</div>
         <div>Space: Jump</div>
         <div>ESC: Pause</div>
       </div>
     </div>
   );
 }
-
-// Exportaciones
-export { Player, Enemies, Collectibles, Platforms, ParticleEffects, GameUI };

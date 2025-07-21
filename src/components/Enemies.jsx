@@ -14,6 +14,7 @@ import { useAudioManager } from '../hooks/useAudioManager';
 
 // ========================================
 // COMPONENTE ENEMIES
+// Ubicación: src/components/Enemies.jsx
 // ========================================
 
 export function Enemies({ level = 1, playerPosition = { x: 0, y: 0, z: 0 } }) {
@@ -35,8 +36,8 @@ export function Enemies({ level = 1, playerPosition = { x: 0, y: 0, z: 0 } }) {
             Math.random() * 100 - 50
           ],
           type: Math.random() > 0.7 ? 'heavy' : 'basic',
-          health: Math.random() > 0.7 ? 60 : 30,
-          speed: Math.random() * 2 + 1
+          health: Math.random() > 0.7 ? 30 : 15,
+          alive: true
         });
       }
 
@@ -48,13 +49,15 @@ export function Enemies({ level = 1, playerPosition = { x: 0, y: 0, z: 0 } }) {
 
   return (
     <group>
-      {enemies.map(enemy => (
+      {enemies.filter(enemy => enemy.alive).map(enemy => (
         <Enemy
           key={enemy.id}
           {...enemy}
           playerPosition={playerPosition}
           onDestroy={(id) => {
-            setEnemies(prev => prev.filter(e => e.id !== id));
+            setEnemies(prev => prev.map(e => 
+              e.id === id ? { ...e, alive: false } : e
+            ));
             playSound('hit');
           }}
         />
@@ -63,79 +66,62 @@ export function Enemies({ level = 1, playerPosition = { x: 0, y: 0, z: 0 } }) {
   );
 }
 
-function Enemy({ id, position, type, health, speed, playerPosition, onDestroy }) {
+function Enemy({ id, position, type, health, playerPosition, onDestroy }) {
   const meshRef = useRef();
   const rigidBodyRef = useRef();
   const [currentHealth, setCurrentHealth] = useState(health);
-  const [isAlive, setIsAlive] = useState(true);
 
-  // IA básica del enemigo
-  useFrame((_, delta) => {
-    if (!rigidBodyRef.current || !isAlive) return;
+  const color = type === 'heavy' ? '#8b0000' : '#ff4444';
+  const size = type === 'heavy' ? 0.8 : 0.6;
+  const speed = type === 'heavy' ? 1 : 2;
+
+  // IA básica - perseguir al jugador
+  useFrame(() => {
+    if (!rigidBodyRef.current || !playerPosition) return;
 
     const currentPos = rigidBodyRef.current.translation();
-    const distanceToPlayer = Math.sqrt(
-      Math.pow(playerPosition.x - currentPos.x, 2) +
-      Math.pow(playerPosition.z - currentPos.z, 2)
-    );
+    const direction = {
+      x: playerPosition.x - currentPos.x,
+      z: playerPosition.z - currentPos.z
+    };
 
-    // Perseguir al jugador si está cerca
-    if (distanceToPlayer < 20) {
-      const directionX = (playerPosition.x - currentPos.x) / distanceToPlayer;
-      const directionZ = (playerPosition.z - currentPos.z) / distanceToPlayer;
-      
+    const distance = Math.sqrt(direction.x * direction.x + direction.z * direction.z);
+    
+    if (distance > 1) {
+      const normalizedDirection = {
+        x: direction.x / distance,
+        z: direction.z / distance
+      };
+
       rigidBodyRef.current.setLinvel({
-        x: directionX * speed,
+        x: normalizedDirection.x * speed,
         y: rigidBodyRef.current.linvel().y,
-        z: directionZ * speed
+        z: normalizedDirection.z * speed
       });
     }
   });
 
-  // Manejar daño
   const takeDamage = useCallback((damage) => {
-    const newHealth = currentHealth - damage;
-    setCurrentHealth(newHealth);
-    
-    if (newHealth <= 0) {
-      setIsAlive(false);
-      setTimeout(() => onDestroy(id), 100);
-    }
-  }, [currentHealth, id, onDestroy]);
-
-  if (!isAlive) return null;
-
-  const enemyColor = type === 'heavy' ? '#8b0000' : '#ff4444';
-  const enemySize = type === 'heavy' ? [1.5, 1.5, 1.5] : [1, 1, 1];
+    setCurrentHealth(prev => {
+      const newHealth = prev - damage;
+      if (newHealth <= 0) {
+        onDestroy(id);
+      }
+      return newHealth;
+    });
+  }, [id, onDestroy]);
 
   return (
     <RigidBody
       ref={rigidBodyRef}
       position={position}
       type="dynamic"
-      colliders="cuboid"
-      mass={type === 'heavy' ? 2 : 1}
+      userData={{ type: 'enemy', takeDamage }}
     >
-      <Box ref={meshRef} args={enemySize} castShadow receiveShadow>
-        <meshStandardMaterial 
-          color={enemyColor}
-          roughness={0.4}
-          metalness={0.2}
-        />
-      </Box>
-      
-      {/* Barra de vida */}
-      <group position={[0, 1, 0]}>
-        <Box args={[1.2, 0.1, 0.1]} position={[0, 0, 0]}>
-          <meshBasicMaterial color="#ff0000" />
-        </Box>
-        <Box 
-          args={[(currentHealth / health) * 1.2, 0.1, 0.1]} 
-          position={[-(1.2 - (currentHealth / health) * 1.2) / 2, 0, 0.01]}
-        >
-          <meshBasicMaterial color="#00ff00" />
-        </Box>
-      </group>
+      <mesh ref={meshRef} castShadow>
+        <boxGeometry args={[size, size, size]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
     </RigidBody>
   );
 }

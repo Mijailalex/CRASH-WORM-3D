@@ -14,117 +14,87 @@ import { useAudioManager } from '../hooks/useAudioManager';
 
 // ========================================
 // COMPONENTE COLLECTIBLES
+// Ubicación: src/components/Collectibles.jsx
 // ========================================
 
-export function Collectibles({ count = 50, area = 100 }) {
+export function Collectibles({ count = 10 }) {
   const [collectibles, setCollectibles] = useState([]);
-  const { actions } = useGame();
-  const { playSound } = useAudioManager();
 
-  // Generar coleccionables
   useEffect(() => {
     const generateCollectibles = () => {
-      const items = [];
+      const newCollectibles = [];
       
       for (let i = 0; i < count; i++) {
-        items.push({
+        newCollectibles.push({
           id: i,
           position: [
-            Math.random() * area - area / 2,
-            Math.random() * 10 + 5,
-            Math.random() * area - area / 2
+            Math.random() * 80 - 40,
+            Math.random() * 5 + 3,
+            Math.random() * 80 - 40
           ],
-          type: Math.random() > 0.8 ? 'powerup' : 'gem',
-          value: Math.random() > 0.8 ? 50 : 10,
+          type: Math.random() > 0.8 ? 'special' : 'normal',
           collected: false
         });
       }
       
-      setCollectibles(items);
+      setCollectibles(newCollectibles);
     };
 
     generateCollectibles();
-  }, [count, area]);
-
-  const handleCollect = useCallback((id, item) => {
-    setCollectibles(prev => 
-      prev.map(c => c.id === id ? { ...c, collected: true } : c)
-    );
-    
-    if (item.type === 'gem') {
-      actions.collectGem(item.value);
-      playSound('collectGem');
-    } else {
-      actions.collectPowerUp(item.type);
-      playSound('collectPowerup');
-    }
-  }, [actions, playSound]);
+  }, [count]);
 
   return (
     <group>
-      {collectibles.map(item => 
-        !item.collected && (
-          <Collectible
-            key={item.id}
-            {...item}
-            onCollect={() => handleCollect(item.id, item)}
-          />
-        )
-      )}
+      {collectibles.filter(item => !item.collected).map(item => (
+        <Collectible
+          key={item.id}
+          {...item}
+          onCollect={(id) => {
+            setCollectibles(prev => prev.map(c => 
+              c.id === id ? { ...c, collected: true } : c
+            ));
+          }}
+        />
+      ))}
     </group>
   );
 }
 
-function Collectible({ id, position, type, value, onCollect }) {
+function Collectible({ id, position, type, onCollect }) {
   const meshRef = useRef();
-  
-  // Animación de rotación y flotación
+  const [hovered, setHovered] = useState(false);
+
+  const { scale } = useSpring({
+    scale: hovered ? 1.2 : 1,
+    config: { mass: 1, tension: 280, friction: 60 }
+  });
+
   useFrame((state) => {
     if (meshRef.current) {
       meshRef.current.rotation.y += 0.02;
-      meshRef.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * 2) * 0.3;
+      meshRef.current.position.y += Math.sin(state.clock.elapsedTime * 2) * 0.01;
     }
   });
 
-  const isGem = type === 'gem';
-  const color = isGem ? '#00ffff' : '#ffff00';
-  const size = isGem ? 0.5 : 0.8;
+  const color = type === 'special' ? '#ffd700' : '#00ff00';
+  const points = type === 'special' ? 100 : 10;
 
   return (
     <RigidBody
       position={position}
       type="kinematicPosition"
-      sensor={true}
-      onIntersectionEnter={onCollect}
+      sensor
+      userData={{ type: 'collectible', item: { id, type, points } }}
     >
-      <group ref={meshRef}>
-        {isGem ? (
-          <Box args={[size, size, size]} castShadow>
-            <meshStandardMaterial 
-              color={color}
-              emissive={color}
-              emissiveIntensity={0.3}
-              transparent
-              opacity={0.8}
-            />
-          </Box>
-        ) : (
-          <Sphere args={[size]} castShadow>
-            <meshStandardMaterial 
-              color={color}
-              emissive={color}
-              emissiveIntensity={0.5}
-            />
-          </Sphere>
-        )}
-        
-        {/* Efecto de brillo */}
-        <pointLight
-          color={color}
-          intensity={0.5}
-          distance={5}
-        />
-      </group>
+      <animated.mesh
+        ref={meshRef}
+        scale={scale}
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
+      >
+        <sphereGeometry args={[0.3, 16, 16]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.2} />
+      </animated.mesh>
     </RigidBody>
   );
 }

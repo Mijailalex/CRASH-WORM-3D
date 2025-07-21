@@ -14,32 +14,49 @@ import { useAudioManager } from '../hooks/useAudioManager';
 
 // ========================================
 // COMPONENTE PLATFORMS
+// Ubicación: src/components/Platforms.jsx
 // ========================================
 
-export function Platforms({ level = 1 }) {
-  const platforms = useMemo(() => {
-    const platformCount = 20 + level * 5;
-    const generatedPlatforms = [];
+export function Platforms({ count = 15 }) {
+  const [platforms, setPlatforms] = useState([]);
 
-    for (let i = 0; i < platformCount; i++) {
-      generatedPlatforms.push({
-        id: i,
-        position: [
-          Math.random() * 200 - 100,
-          Math.random() * 50,
-          Math.random() * 200 - 100
-        ],
-        size: [
-          Math.random() * 10 + 5,
-          1,
-          Math.random() * 10 + 5
-        ],
-        type: Math.random() > 0.8 ? 'moving' : 'static'
+  useEffect(() => {
+    const generatePlatforms = () => {
+      const newPlatforms = [];
+      
+      // Plataforma base
+      newPlatforms.push({
+        id: 0,
+        position: [0, 0, 0],
+        size: [50, 1, 50],
+        type: 'ground',
+        color: '#8b4513'
       });
-    }
 
-    return generatedPlatforms;
-  }, [level]);
+      // Plataformas flotantes
+      for (let i = 1; i < count; i++) {
+        newPlatforms.push({
+          id: i,
+          position: [
+            Math.random() * 60 - 30,
+            Math.random() * 20 + 5,
+            Math.random() * 60 - 30
+          ],
+          size: [
+            Math.random() * 6 + 4,
+            0.5,
+            Math.random() * 6 + 4
+          ],
+          type: Math.random() > 0.8 ? 'moving' : 'static',
+          color: Math.random() > 0.5 ? '#666666' : '#999999'
+        });
+      }
+      
+      setPlatforms(newPlatforms);
+    };
+
+    generatePlatforms();
+  }, [count]);
 
   return (
     <group>
@@ -50,40 +67,28 @@ export function Platforms({ level = 1 }) {
   );
 }
 
-function Platform({ id, position, size, type }) {
+function Platform({ id, position, size, type, color }) {
   const meshRef = useRef();
   const rigidBodyRef = useRef();
 
-  // Movimiento para plataformas móviles
   useFrame((state) => {
-    if (type === 'moving' && rigidBodyRef.current) {
+    if (type === 'moving' && meshRef.current) {
       const time = state.clock.elapsedTime;
-      const newPos = {
-        x: position[0] + Math.sin(time * 0.5) * 5,
-        y: position[1],
-        z: position[2] + Math.cos(time * 0.3) * 3
-      };
-      
-      rigidBodyRef.current.setTranslation(newPos, true);
+      meshRef.current.position.x = position[0] + Math.sin(time * 0.5) * 3;
     }
   });
-
-  const platformColor = type === 'moving' ? '#4a90e2' : '#8b4513';
 
   return (
     <RigidBody
       ref={rigidBodyRef}
       position={position}
       type={type === 'moving' ? 'kinematicPosition' : 'fixed'}
-      colliders="cuboid"
+      userData={{ type: 'platform' }}
     >
-      <Box ref={meshRef} args={size} castShadow receiveShadow>
-        <meshStandardMaterial 
-          color={platformColor}
-          roughness={0.8}
-          metalness={0.1}
-        />
-      </Box>
+      <mesh ref={meshRef} receiveShadow>
+        <boxGeometry args={size} />
+        <meshStandardMaterial color={color} />
+      </mesh>
     </RigidBody>
   );
 }
