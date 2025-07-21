@@ -1,0 +1,156 @@
+{
+  "status": "healthy",
+  "service": "crash-worm-3d-frontend",
+  "version": "1.0.0",
+  "timestamp": "2024-01-15T12:00:00.000Z",
+  "environment": "production",
+  "uptime": 0,
+  "build": {
+    "version": "1.0.0",
+    "commit": "main",
+    "branch": "main",
+    "buildTime": "2024-01-15T10:00:00.000Z",
+    "buildNumber": "1"
+  },
+  "system": {
+    "platform": "web",
+    "architecture": "javascript",
+    "nodeVersion": "20.10.0",
+    "dependencies": {
+      "react": "^18.2.0",
+      "three": "^0.158.0",
+      "vite": "^5.0.8"
+    }
+  },
+  "health": {
+    "status": "UP",
+    "checks": {
+      "webgl": {
+        "status": "UP",
+        "description": "WebGL rendering context availability",
+        "required": true
+      },
+      "audio": {
+        "status": "UP",
+        "description": "Web Audio API availability",
+        "required": false
+      },
+      "storage": {
+        "status": "UP",
+        "description": "LocalStorage and SessionStorage availability",
+        "required": false
+      },
+      "network": {
+        "status": "UP",
+        "description": "Network connectivity for multiplayer",
+        "required": false
+      },
+      "performance": {
+        "status": "UP",
+        "description": "Performance API availability",
+        "required": false
+      }
+    }
+  },
+  "features": {
+    "multiplayer": {
+      "enabled": true,
+      "status": "available",
+      "maxPlayers": 16,
+      "activeRooms": 0,
+      "totalPlayers": 0
+    },
+    "graphics": {
+      "webgl": true,
+      "webgl2": true,
+      "shadows": true,
+      "postprocessing": true,
+      "quality": "auto"
+    },
+    "audio": {
+      "enabled": true,
+      "spatialAudio": true,
+      "formats": ["mp3", "wav", "ogg"],
+      "masterVolume": 0.8
+    },
+    "controls": {
+      "keyboard": true,
+      "mouse": true,
+      "gamepad": true,
+      "touch": true
+    },
+    "pwa": {
+      "enabled": true,
+      "installable": true,
+      "offline": true,
+      "notifications": false
+    }
+  },
+  "metrics": {
+    "performance": {
+      "loadTime": 0,
+      "firstContentfulPaint": 0,
+      "largestContentfulPaint": 0,
+      "cumulativeLayoutShift": 0,
+      "firstInputDelay": 0
+    },
+    "resources": {
+      "memoryUsage": 0,
+      "cpuUsage": 0,
+      "networkLatency": 0,
+      "fps": 60
+    },
+    "errors": {
+      "javascript": 0,
+      "network": 0,
+      "rendering": 0,
+      "audio": 0
+    }
+  },
+  "configuration": {
+    "debug": false,
+    "analytics": true,
+    "errorReporting": true,
+    "performance": {
+      "targetFPS": 60,
+      "adaptiveQuality": true,
+      "objectPooling": true
+    },
+    "security": {
+      "contentSecurityPolicy": true,
+      "httpsOnly": true,
+      "rateLimiting": true
+    }
+  },
+  "endpoints": {
+    "api": "/api",
+    "websocket": "/socket.io",
+    "health": "/health",
+    "metrics": "/metrics",
+    "status": "/status"
+  },
+  "compatibility": {
+    "browsers": {
+      "chrome": ">=80",
+      "firefox": ">=78",
+      "safari": ">=14",
+      "edge": ">=88"
+    },
+    "features": {
+      "webgl": "required",
+      "es6": "required",
+      "websockets": "required",
+      "audioContext": "recommended",
+      "gamepad": "optional"
+    }
+  },
+  "monitoring": {
+    "healthCheckInterval": 30,
+    "metricsCollection": true,
+    "errorTracking": true,
+    "performanceMonitoring": true,
+    "userSessionTracking": false
+  },
+  "lastUpdated": "2024-01-15T12:00:00.000Z",
+  "responseTime": 0
+}

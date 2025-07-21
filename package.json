@@ -1,62 +1,212 @@
 {
-  "name": "crash-worm-3d",
+  "name": "crash-worm-3d-adventure",
   "version": "1.0.0",
-  "description": "Crash Worm 3D Adventure - Juego 3D multiplayer con React y Three.js",
+  "description": "Juego de plataformas 3D multijugador con gráficos avanzados y física realista",
   "type": "module",
-  "scripts": {
-    "dev": "vite --host",
-    "build": "vite build",
-    "preview": "vite preview --host",
-    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "lint:fix": "eslint . --ext js,jsx --fix",
-    "format": "prettier --write \"src/**/*.{js,jsx,css,md}\"",
-    "test": "vitest",
-    "server": "cd server && npm start"
-  },
+  "private": true,
   "keywords": [
-    "react",
-    "threejs",
-    "3d-game",
+    "game",
+    "3d",
     "multiplayer",
-    "crash-worm",
-    "websocket"
+    "platform",
+    "adventure",
+    "webgl",
+    "threejs",
+    "react",
+    "vite"
   ],
-  "author": "Crash Worm 3D Team",
+  "author": {
+    "name": "Crash Worm 3D Team",
+    "email": "team@crashworm3d.com",
+    "url": "https://crashworm3d.com"
+  },
   "license": "MIT",
+  "homepage": "https://crashworm3d.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crash-worm-3d/client.git"
+  },
+  "bugs": {
+    "url": "https://github.com/crash-worm-3d/client/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead",
+    "not ie 11",
+    "not op_mini all"
+  ],
+  "scripts": {
+    "dev": "vite --host --mode development",
+    "build": "vite build --mode production",
+    "build:staging": "vite build --mode staging",
+    "build:analyze": "VITE_BUILD_ANALYZE=true vite build --mode production",
+    "preview": "vite preview --host --port 4173",
+    "serve": "npm run build && npm run preview",
+    "lint": "eslint . --ext js,jsx,ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint . --ext js,jsx,ts,tsx --fix",
+    "lint:ci": "eslint . --ext js,jsx,ts,tsx --format @eslint/eslintrc --max-warnings 0",
+    "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx,css,scss,md,json}\"",
+    "format:check": "prettier --check \"src/**/*.{js,jsx,ts,tsx,css,scss,md,json}\"",
+    "test": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "type-check": "tsc --noEmit",
+    "clean": "rimraf dist node_modules/.vite",
+    "clean:all": "rimraf dist node_modules node_modules/.vite package-lock.json",
+    "reinstall": "npm run clean:all && npm install",
+    "security:audit": "npm audit --audit-level moderate",
+    "security:fix": "npm audit fix",
+    "deps:update": "npm-check-updates -u",
+    "deps:check": "npm-check-updates",
+    "build:docker": "docker build -t crash-worm-3d-client .",
+    "docker:run": "docker run -p 3000:3000 crash-worm-3d-client",
+    "server:start": "cd server && npm start",
+    "server:dev": "cd server && npm run dev",
+    "full:dev": "concurrently \"npm run dev\" \"npm run server:dev\"",
+    "full:build": "npm run build && cd server && npm run build",
+    "prepare": "husky install || true",
+    "postinstall": "patch-package",
+    "precommit": "lint-staged",
+    "validate": "npm run type-check && npm run lint:ci && npm run test:coverage && npm run build"
+  },
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "three": "^0.158.0",
-    "@react-three/fiber": "^8.15.12",
+    "@react-three/fiber": "^8.15.11",
     "@react-three/drei": "^9.88.13",
-    "@react-three/rapier": "^1.1.0",
-    "framer-motion": "^10.16.16",
-    "styled-components": "^6.1.8",
+    "@react-three/rapier": "^1.4.0",
+    "@react-three/postprocessing": "^2.15.11",
+    "@react-three/xr": "^5.7.1",
     "tone": "^14.7.77",
     "howler": "^2.2.4",
-    "lodash": "^4.17.21",
-    "mathjs": "^12.2.1",
-    "uuid": "^9.0.1",
-    "lz-string": "^1.5.0",
-    "crypto-js": "^4.2.0",
+    "framer-motion": "^10.16.5",
     "@react-spring/three": "^9.7.3",
-    "axios": "^1.6.2"
+    "styled-components": "^6.1.1",
+    "mathjs": "^12.2.0",
+    "lodash": "^4.17.21",
+    "uuid": "^9.0.1",
+    "crypto-js": "^4.2.0",
+    "lz-string": "^1.5.0",
+    "zustand": "^4.4.7",
+    "immer": "^10.0.3",
+    "axios": "^1.6.2",
+    "socket.io-client": "^4.7.4",
+    "workbox-window": "^7.0.0",
+    "idb": "^7.1.1",
+    "react-error-boundary": "^4.0.11",
+    "react-helmet-async": "^2.0.4",
+    "react-hot-toast": "^2.4.1",
+    "react-use": "^17.4.0",
+    "use-debounce": "^10.0.0",
+    "use-sound": "^4.0.1",
+    "cannon-es": "^0.20.0",
+    "@dimforge/rapier3d-compat": "^0.11.2",
+    "stats.js": "^0.17.0",
+    "dat.gui": "^0.7.9"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@types/three": "^0.158.3",
+    "@types/lodash": "^4.14.202",
+    "@types/uuid": "^9.0.7",
+    "@types/crypto-js": "^4.2.1",
     "@vitejs/plugin-react": "^4.2.1",
     "vite": "^5.0.8",
+    "vite-plugin-pwa": "^0.17.4",
+    "vite-plugin-windicss": "^1.9.3",
+    "vite-bundle-analyzer": "^0.7.0",
+    "vitest": "^1.0.4",
+    "@vitest/ui": "^1.0.4",
+    "@testing-library/react": "^14.1.2",
+    "@testing-library/jest-dom": "^6.1.5",
+    "@testing-library/user-event": "^14.5.1",
+    "jsdom": "^23.0.1",
+    "msw": "^2.0.11",
+    "@playwright/test": "^1.40.1",
     "eslint": "^8.55.0",
+    "@eslint/eslintrc": "^2.1.4",
     "eslint-plugin-react": "^7.33.2",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "eslint-plugin-jsx-a11y": "^6.8.0",
+    "eslint-plugin-import": "^2.29.0",
+    "eslint-plugin-security": "^1.7.1",
+    "@typescript-eslint/eslint-plugin": "^6.14.0",
+    "@typescript-eslint/parser": "^6.14.0",
     "prettier": "^3.1.1",
-    "vitest": "^1.1.0"
+    "prettier-plugin-organize-imports": "^3.2.4",
+    "typescript": "^5.3.3",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.0",
+    "patch-package": "^8.0.0",
+    "postinstall-postinstall": "^2.1.0",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "rimraf": "^5.0.5",
+    "npm-check-updates": "^16.14.12",
+    "serve": "^14.2.1",
+    "http-server": "^14.1.1",
+    "dotenv-cli": "^7.3.0",
+    "babel-plugin-transform-remove-console": "^6.9.4",
+    "@babel/preset-react": "^7.23.3",
+    "rollup-plugin-visualizer": "^5.11.0",
+    "sass": "^1.69.5",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "windicss": "^3.5.6",
+    "@windicss/plugin-animations": "^1.0.9"
   },
-  "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=9.0.0"
-  }
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "optionalDependencies": {
+    "@esbuild/linux-x64": "^0.19.8",
+    "@esbuild/win32-x64": "^0.19.8",
+    "@esbuild/darwin-x64": "^0.19.8",
+    "@esbuild/darwin-arm64": "^0.19.8"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{css,scss,md,json}": [
+      "prettier --write"
+    ]
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged",
+      "pre-push": "npm run type-check && npm run test:coverage"
+    }
+  },
+  "msw": {
+    "workerDirectory": "public"
+  },
+  "volta": {
+    "node": "20.10.0",
+    "npm": "10.2.3"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  },
+  "funding": {
+    "type": "individual",
+    "url": "https://github.com/sponsors/crash-worm-3d"
+  },
+  "packageManager": "npm@10.2.3"
 }

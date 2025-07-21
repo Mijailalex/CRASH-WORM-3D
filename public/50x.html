@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <!-- ======================================== -->
+    <!-- 🔥 CRASH WORM 3D - ERROR SERVIDOR      -->
+    <!-- ======================================== -->
+    <!-- Ubicación: public/50x.html -->
+    
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a1a2e">
+    
+    <title>Error del Servidor - Crash Worm 3D Adventure</title>
+    <meta name="description" content="Estamos experimentando problemas técnicos. Estamos trabajando para solucionarlo.">
+    <meta name="robots" content="noindex, nofollow">
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png">
+    
+    <style>
+        /* ======================================== */
+        /* 🎨 ESTILOS PARA ERROR DE SERVIDOR      */
+        /* ======================================== */
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+        
+        /* Fondo animado con efecto de falla técnica */
+        .error-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 2rem;
+            text-align: center;
+        }
+        
+        .error-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                linear-gradient(45deg, transparent 40%, rgba(255, 107, 107, 0.1) 50%, transparent 60%),
+                linear-gradient(-45deg, transparent 40%, rgba(255, 193, 7, 0.1) 50%, transparent 60%);
+            animation: technicalGlitch 3s ease-in-out infinite alternate;
+        }
+        
+        @keyframes technicalGlitch {
+            0% { 
+                opacity: 0.3;
+                transform: translateX(0);
+            }
+            25% { 
+                opacity: 0.6;
+                transform: translateX(-2px);
+            }
+            50% { 
+                opacity: 0.4;
+                transform: translateX(2px);
+            }
+            75% { 
+                opacity: 0.7;
+                transform: translateX(-1px);
+            }
+            100% { 
+                opacity: 0.5;
+                transform: translateX(1px);
+            }
+        }
+        
+        .error-content {
+            position: relative;
+            z-index: 1;
+            max-width: 700px;
+        }
+        
+        /* Icono de error técnico */
+        .error-icon {
+            font-size: 8rem;
+            margin-bottom: 2rem;
+            animation: iconGlitch 2s infinite;
+            position: relative;
+        }
+        
+        .error-icon::before {
+            content: '⚠️';
+            display: block;
+            filter: drop-shadow(0 0 20px rgba(255, 193, 7, 0.5));
+        }
+        
+        @keyframes iconGlitch {
+            0%, 90%, 100% {
+                transform: scale(1);
+                filter: drop-shadow(0 0 20px rgba(255, 193, 7, 0.5));
+            }
+            5% {
+                transform: scale(1.05) skew(2deg);
+                filter: drop-shadow(0 0 20px rgba(255, 107, 107, 0.7));
+            }
+            10% {
+                transform: scale(0.95) skew(-2deg);
+                filter: drop-shadow(0 0 20px rgba(72, 219, 251, 0.7));
+            }
+        }
+        
+        /* Código de error */
+        .error-code {
+            font-size: 4rem;
+            font-weight: 900;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, #ff6b6b, #feca57);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: codeFlicker 1.5s infinite alternate;
+            text-shadow: 0 0 30px rgba(255, 107, 107, 0.5);
+        }
+        
+        @keyframes codeFlicker {
+            0% { opacity: 1; }
+            50% { opacity: 0.8; }
+            100% { opacity: 1; }
+        }
+        
+        /* Título del error */
+        .error-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: #ffffff;
+            animation: titleShake 0.1s infinite alternate;
+        }
+        
+        @keyframes titleShake {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(1px); }
+        }
+        
+        /* Mensaje descriptivo */
+        .error-message {
+            font-size: 1.2rem;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+            color: rgba(255, 255, 255, 0.9);
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        /* Estado del sistema */
+        .system-status {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 2rem;
+            margin: 2rem 0;
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            text-align: left;
+        }
+        
+        .system-status h3 {
+            color: #feca57;
+            margin-bottom: 1.5rem;
+            font-size: 1.3rem;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.8rem 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .status-label {
+            font-weight: 600;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.9rem;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .status-dot.checking {
+            background: #feca57;
+            animation: statusPulse 1.5s infinite;
+        }
+        
+        .status-dot.error {
+            background: #ff6b6b;
+            animation: statusBlink 1s infinite;
+        }
+        
+        .status-dot.ok {
+            background: #1dd1a1;
+        }
+        
+        @keyframes statusPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.3); }
+        }
+        
+        @keyframes statusBlink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+        
+        /* Información técnica */
+        .technical-info {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            text-align: left;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .technical-info h4 {
+            color: #48dbfb;
+            margin-bottom: 1rem;
+            font-family: inherit;
+        }
+        
+        .error-details {
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.5;
+        }
+        
+        .error-details .timestamp {
+            color: #feca57;
+        }
+        
+        .error-details .error-id {
+            color: #ff9ff3;
+        }
+        
+        /* Botones de acción */
+        .error-actions {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 2rem;
+        }
+        
+        .btn {
+            padding: 1rem 2rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            min-width: 160px;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(45deg, #1dd1a1 0%, #10ac84 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(29, 209, 161, 0.4);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 25px rgba(29, 209, 161, 0.6);
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            backdrop-filter: blur(10px);
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-3px);
+        }
+        
+        .btn-info {
+            background: linear-gradient(45deg, #48dbfb 0%, #0abde3 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(72, 219, 251, 0.4);
+        }
+        
+        .btn-info:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 25px rgba(72, 219, 251, 0.6);
+        }
+        
+        /* Indicador de carga */
+        .loading {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .btn.loading .loading {
+            display: inline-block;
+        }
+        
+        .btn.loading .btn-text {
+            display: none;
+        }
+        
+        /* Contador de reintento */
+        .retry-counter {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            background: rgba(255, 107, 107, 0.9);
+            color: white;
+            padding: 0.8rem 1.2rem;
+            border-radius: 25px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            animation: counterPulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes counterPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .error-container {
+                padding: 1rem;
+            }
+            
+            .error-icon {
+                font-size: 6rem;
+            }
+            
+            .error-code {
+                font-size: 3rem;
+            }
+            
+            .error-title {
+                font-size: 2rem;
+            }
+            
+            .error-message {
+                font-size: 1.1rem;
+            }
+            
+            .system-status,
+            .technical-info {
+                padding: 1.5rem;
+            }
+            
+            .status-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .error-actions {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .btn {
+                width: 100%;
+                max-width: 250px;
+            }
+            
+            .retry-counter {
+                top: 1rem;
+                right: 1rem;
+                font-size: 0.8rem;
+                padding: 0.6rem 1rem;
+            }
+        }
+        
+        /* Animación de entrada */
+        .error-content {
+            animation: slideInUp 1s ease-out;
+        }
+        
+        @keyframes slideInUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Contador de reintentos -->
+    <div class="retry-counter" id="retryCounter" style="display: none;">
+        🔄 Reintentando: <span id="retryCount">0</span>
+    </div>
+    
+    <!-- Contenido principal del error -->
+    <div class="error-container">
+        <div class="error-content">
+            <!-- Icono de error -->
+            <div class="error-icon"></div>
+            
+            <!-- Código de error -->
+            <div class="error-code" id="errorCode">50x</div>
+            
+            <!-- Título del error -->
+            <h1 class="error-title">Error del Servidor</h1>
+            
+            <!-- Mensaje descriptivo -->
+            <p class="error-message">
+                Estamos experimentando problemas técnicos temporales.<br>
+                Nuestro equipo está trabajando para solucionarlo lo antes posible.
+            </p>
+            
+            <!-- Estado del sistema -->
+            <div class="system-status">
+                <h3>
+                    🔧 Estado del Sistema
+                </h3>
+                <div class="status-grid">
+                    <div class="status-item">
+                        <span class="status-label">Frontend</span>
+                        <span class="status-indicator">
+                            <span class="status-dot ok"></span>
+                            Operativo
+                        </span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">API</span>
+                        <span class="status-indicator">
+                            <span class="status-dot error" id="apiStatus"></span>
+                            <span id="apiStatusText">Verificando...</span>
+                        </span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Base de Datos</span>
+                        <span class="status-indicator">
+                            <span class="status-dot checking" id="dbStatus"></span>
+                            <span id="dbStatusText">Verificando...</span>
+                        </span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">WebSocket</span>
+                        <span class="status-indicator">
+                            <span class="status-dot checking" id="wsStatus"></span>
+                            <span id="wsStatusText">Verificando...</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Información técnica -->
+            <div class="technical-info">
+                <h4>📊 Información Técnica</h4>
+                <div class="error-details">
+                    <div>Timestamp: <span class="timestamp" id="errorTimestamp">Cargando...</span></div>
+                    <div>Error ID: <span class="error-id" id="errorId">Generando...</span></div>
+                    <div>Server: <span id="serverInfo">crash-worm-3d-v1</span></div>
+                    <div>Status Code: <span id="statusCode">50x</span></div>
+                    <div>ETA Resolución: <span id="etaResolution">Estimando...</span></div>
+                </div>
+            </div>
+            
+            <!-- Botones de acción -->
+            <div class="error-actions">
+                <button class="btn btn-primary" onclick="checkServerStatus()" id="checkBtn">
+                    <div class="loading"></div>
+                    <span class="btn-text">🔍 Verificar Estado</span>
+                </button>
+                
+                <button class="btn btn-secondary" onclick="retryPage()" id="retryBtn">
+                    <div class="loading"></div>
+                    <span class="btn-text">🔄 Reintentar</span>
+                </button>
+                
+                <a href="/" class="btn btn-info">
+                    🏠 Ir al Inicio
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // ========================================
+        // 🔧 FUNCIONALIDAD DEL ERROR DE SERVIDOR
+        // ========================================
+        
+        // Variables globales
+        let retryAttempts = 0;
+        let maxRetryAttempts = 5;
+        let autoCheckInterval;
+        let estimatedETA = 5; // minutos
+        
+        // ========================================
+        // 🚀 INICIALIZACIÓN
+        // ========================================
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeErrorPage();
+            startAutoStatusCheck();
+        });
+        
+        function initializeErrorPage() {
+            // Generar información técnica
+            document.getElementById('errorTimestamp').textContent = new Date().toISOString();
+            document.getElementById('errorId').textContent = generateErrorId();
+            document.getElementById('etaResolution').textContent = `~${estimatedETA} minutos`;
+            
+            // Detectar código de error específico
+            detectSpecificError();
+            
+            // Iniciar verificación de servicios
+            checkAllServices();
+        }
+        
+        function generateErrorId() {
+            const timestamp = Date.now().toString(36);
+            const random = Math.random().toString(36).substr(2, 5);
+            return `ERR-${timestamp}-${random}`.toUpperCase();
+        }
+        
+        function detectSpecificError() {
+            // Intentar detectar el error específico basado en la URL o parámetros
+            const urlParams = new URLSearchParams(window.location.search);
+            const errorCode = urlParams.get('code') || '500';
+            
+            document.getElementById('errorCode').textContent = errorCode;
+            document.getElementById('statusCode').textContent = errorCode;
+            
+            // Personalizar mensaje según el tipo de error
+            const errorMessages = {
+                '500': 'Error interno del servidor',
+                '502': 'Bad Gateway - Servidor no disponible',
+                '503': 'Servicio temporalmente no disponible',
+                '504': 'Gateway Timeout - Respuesta lenta del servidor'
+            };
+            
+            const errorTitles = {
+                '500': 'Error Interno del Servidor',
+                '502': 'Servicio No Disponible',
+                '503': 'Mantenimiento Temporal',
+                '504': 'Tiempo de Respuesta Agotado'
+            };
+            
+            if (errorMessages[errorCode]) {
+                document.querySelector('.error-title').textContent = errorTitles[errorCode];
+                document.querySelector('.error-message').innerHTML = 
+                    errorMessages[errorCode] + '<br>Nuestro equipo está trabajando para solucionarlo.';
+            }
+        }
+        
+        // ========================================
+        // 🔍 VERIFICACIÓN DE SERVICIOS
+        // ========================================
+        
+        async function checkAllServices() {
+            const services = ['api', 'db', 'ws'];
+            
+            for (const service of services) {
+                await checkService(service);
+                await new Promise(resolve => setTimeout(resolve, 500)); // Delay entre checks
+            }
+        }
+        
+        async function checkService(service) {
+            const statusDot = document.getElementById(`${service}Status`);
+            const statusText = document.getElementById(`${service}StatusText`);
+            
+            statusDot.className = 'status-dot checking';
+            statusText.textContent = 'Verificando...';
+            
+            try {
+                let isServiceUp = false;
+                
+                switch (service) {
+                    case 'api':
+                        isServiceUp = await checkAPI();
+                        break;
+                    case 'db':
+                        isServiceUp = await checkDatabase();
+                        break;
+                    case 'ws':
+                        isServiceUp = await checkWebSocket();
+                        break;
+                }
+                
+                if (isServiceUp) {
+                    statusDot.className = 'status-dot ok';
+                    statusText.textContent = 'Operativo';
+                } else {
+                    statusDot.className = 'status-dot error';
+                    statusText.textContent = 'Con problemas';
+                }
+            } catch (error) {
+                statusDot.className = 'status-dot error';
+                statusText.textContent = 'Error';
+                console.warn(`Service check failed for ${service}:`, error);
+            }
+        }
+        
+        async function checkAPI() {
+            try {
+                const response = await fetch('/health', { 
+                    method: 'GET',
+                    cache: 'no-cache',
+                    signal: AbortSignal.timeout(5000)
+                });
+                return response.ok;
+            } catch (error) {
+                return false;
+            }
+        }
+        
+        async function checkDatabase() {
+            try {
+                const response = await fetch('/api/health/db', { 
+                    method: 'GET',
+                    cache: 'no-cache',
+                    signal: AbortSignal.timeout(5000)
+                });
+                return response.ok;
+            } catch (error) {
+                return false;
+            }
+        }
+        
+        async function checkWebSocket() {
+            return new Promise((resolve) => {
+                try {
+                    const ws = new WebSocket(getWebSocketURL());
+                    const timeout = setTimeout(() => {
+                        ws.close();
+                        resolve(false);
+                    }, 3000);
+                    
+                    ws.onopen = () => {
+                        clearTimeout(timeout);
+                        ws.close();
+                        resolve(true);
+                    };
+                    
+                    ws.onerror = () => {
+                        clearTimeout(timeout);
+                        resolve(false);
+                    };
+                } catch (error) {
+                    resolve(false);
+                }
+            });
+        }
+        
+        function getWebSocketURL() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.hostname;
+            const port = window.location.hostname === 'localhost' ? ':8081' : '';
+            return `${protocol}//${host}${port}/socket.io/`;
+        }
+        
+        // ========================================
+        // 🔄 FUNCIONES DE REINTENTO
+        // ========================================
+        
+        async function checkServerStatus() {
+            const checkBtn = document.getElementById('checkBtn');
+            
+            checkBtn.classList.add('loading');
+            checkBtn.disabled = true;
+            
+            try {
+                await checkAllServices();
+                
+                // Verificar si todos los servicios están operativos
+                const allServicesUp = checkIfAllServicesOperational();
+                
+                if (allServicesUp) {
+                    showSuccessMessage('✅ ¡Todos los servicios están operativos! Redirigiendo...');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    showWarningMessage('⚠️ Algunos servicios aún presentan problemas.');
+                }
+            } catch (error) {
+                showErrorMessage('❌ Error verificando el estado del servidor.');
+            } finally {
+                checkBtn.classList.remove('loading');
+                checkBtn.disabled = false;
+            }
+        }
+        
+        function checkIfAllServicesOperational() {
+            const statusDots = document.querySelectorAll('.status-dot');
+            return Array.from(statusDots).every(dot => dot.classList.contains('ok'));
+        }
+        
+        async function retryPage() {
+            retryAttempts++;
+            updateRetryCounter();
+            
+            const retryBtn = document.getElementById('retryBtn');
+            retryBtn.classList.add('loading');
+            retryBtn.disabled = true;
+            
+            try {
+                // Intentar acceder a la página original
+                const response = await fetch(window.location.href, {
+                    method: 'GET',
+                    cache: 'no-cache',
+                    signal: AbortSignal.timeout(10000)
+                });
+                
+                if (response.ok) {
+                    showSuccessMessage('✅ ¡Servidor restaurado! Recargando página...');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    throw new Error(`Server returned ${response.status}`);
+                }
+            } catch (error) {
+                showRetryFailedMessage();
+                
+                if (retryAttempts >= maxRetryAttempts) {
+                    retryBtn.disabled = true;
+                    retryBtn.querySelector('.btn-text').textContent = '⏳ Máximo alcanzado';
+                }
+            } finally {
+                retryBtn.classList.remove('loading');
+            }
+        }
+        
+        function updateRetryCounter() {
+            const counter = document.getElementById('retryCounter');
+            const count = document.getElementById('retryCount');
+            
+            count.textContent = retryAttempts;
+            
+            if (retryAttempts > 0) {
+                counter.style.display = 'block';
+            }
+        }
+        
+        // ========================================
+        // 📢 MENSAJES DE ESTADO
+        // ========================================
+        
+        function showSuccessMessage(message) {
+            showMessage(message, 'rgba(29, 209, 161, 0.95)');
+        }
+        
+        function showWarningMessage(message) {
+            showMessage(message, 'rgba(255, 193, 7, 0.95)');
+        }
+        
+        function showErrorMessage(message) {
+            showMessage(message, 'rgba(255, 107, 107, 0.95)');
+        }
+        
+        function showRetryFailedMessage() {
+            showMessage(
+                `❌ Intento ${retryAttempts} fallido. El servidor sigue sin responder.`,
+                'rgba(255, 107, 107, 0.95)'
+            );
+        }
+        
+        function showMessage(text, backgroundColor) {
+            const message = document.createElement('div');
+            message.style.cssText = `
+                position: fixed;
+                bottom: 2rem;
+                left: 50%;
+                transform: translateX(-50%);
+                background: ${backgroundColor};
+                color: white;
+                padding: 1rem 2rem;
+                border-radius: 25px;
+                font-weight: 600;
+                z-index: 1000;
+                backdrop-filter: blur(10px);
+                animation: slideInUp 0.5s ease-out;
+                text-align: center;
+                max-width: 400px;
+            `;
+            message.textContent = text;
+            document.body.appendChild(message);
+            
+            setTimeout(() => {
+                document.body.removeChild(message);
+            }, 4000);
+        }
+        
+        // ========================================
+        // ⏰ AUTO-CHECK
+        // ========================================
+        
+        function startAutoStatusCheck() {
+            // Auto-check cada 30 segundos
+            autoCheckInterval = setInterval(async () => {
+                const allServicesUp = checkIfAllServicesOperational();
+                
+                if (!allServicesUp) {
+                    await checkAllServices();
+                    
+                    if (checkIfAllServicesOperational()) {
+                        showSuccessMessage('🎉 ¡Servicios restaurados! La página se recargará automáticamente.');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 3000);
+                    }
+                } else {
+                    // Si todos los servicios están up, intentar recargar
+                    try {
+                        const response = await fetch(window.location.href, {
+                            method: 'HEAD',
+                            cache: 'no-cache'
+                        });
+                        
+                        if (response.ok) {
+                            window.location.reload();
+                        }
+                    } catch (error) {
+                        // Continuar con auto-check
+                    }
+                }
+            }, 30000);
+        }
+        
+        // ========================================
+        // 📊 ANALYTICS Y TRACKING
+        // ========================================
+        
+        // Tracking del error del servidor
+        if (window.analytics && typeof window.analytics.track === 'function') {
+            window.analytics.track('Server Error', {
+                errorCode: document.getElementById('statusCode').textContent,
+                errorId: document.getElementById('errorId').textContent,
+                timestamp: document.getElementById('errorTimestamp').textContent,
+                userAgent: navigator.userAgent,
+                page: window.location.pathname
+            });
+        }
+        
+        // Cleanup cuando se deja la página
+        window.addEventListener('beforeunload', () => {
+            if (autoCheckInterval) {
+                clearInterval(autoCheckInterval);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <!-- ======================================== -->
+    <!-- 🎮 CRASH WORM 3D ADVENTURE - HTML BASE -->
+    <!-- ======================================== -->
+    <!-- Ubicación: public/index.html -->
+    
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#1a1a2e" />
+    
+    <!-- Meta Tags SEO -->
+    <title>Crash Worm 3D Adventure - Juego 3D Multijugador</title>
+    <meta name="description" content="Juega Crash Worm 3D Adventure - Un emocionante juego de plataformas 3D multijugador con gráficos avanzados y física realista." />
+    <meta name="keywords" content="juego 3D, multijugador, plataformas, aventura, crash worm, WebGL, React, Three.js" />
+    <meta name="author" content="Crash Worm 3D Team" />
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Crash Worm 3D Adventure" />
+    <meta property="og:description" content="Juego de plataformas 3D multijugador con gráficos avanzados" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://crashworm3d.com" />
+    <meta property="og:image" content="/icons/icon-512x512.png" />
+    <meta property="og:site_name" content="Crash Worm 3D Adventure" />
+    
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Crash Worm 3D Adventure" />
+    <meta name="twitter:description" content="Juego de plataformas 3D multijugador con gráficos avanzados" />
+    <meta name="twitter:image" content="/icons/icon-512x512.png" />
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Crash Worm 3D" />
+    <meta name="application-name" content="Crash Worm 3D" />
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512x512.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512x512.png" />
+    <link rel="shortcut icon" href="/icons/icon-192x192.png" />
+    
+    <!-- Security Headers -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="X-Frame-Options" content="DENY" />
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
+    
+    <!-- Content Security Policy -->
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com;
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+        font-src 'self' https://fonts.gstatic.com;
+        img-src 'self' data: blob: https:;
+        media-src 'self' blob:;
+        connect-src 'self' ws: wss: https:;
+        worker-src 'self' blob:;
+        object-src 'none';
+        base-uri 'self';
+        form-action 'self';
+        upgrade-insecure-requests;
+    " />
+    
+    <!-- Preload Critical Resources -->
+    <link rel="preload" href="/textures/grass.jpg" as="image" type="image/jpeg" />
+    <link rel="preload" href="/textures/stone.jpg" as="image" type="image/jpeg" />
+    <link rel="preload" href="/audio/jump.wav" as="audio" type="audio/wav" />
+    <link rel="preload" href="/audio/collect.wav" as="audio" type="audio/wav" />
+    
+    <!-- DNS Prefetch para APIs externas -->
+    <link rel="dns-prefetch" href="//cdnjs.cloudflare.com" />
+    <link rel="dns-prefetch" href="//fonts.googleapis.com" />
+    <link rel="dns-prefetch" href="//fonts.gstatic.com" />
+    
+    <!-- Critical CSS Inline (Reducir FOUC) -->
+    <style>
+        /* Critical CSS para evitar Flash of Unstyled Content */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #ffffff;
+        }
+        
+        #root {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* Loading Screen Critical CSS */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            opacity: 1;
+            transition: opacity 0.5s ease-out;
+        }
+        
+        .loading-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .loading-logo {
+            font-size: 3rem;
+            font-weight: bold;
+            margin-bottom: 2rem;
+            text-align: center;
+            background: linear-gradient(45deg, #00d4ff, #7c3aed, #f59e0b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: pulse 2s infinite;
+        }
+        
+        .loading-bar {
+            width: 300px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 1rem;
+        }
+        
+        .loading-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #00d4ff, #7c3aed);
+            width: 0%;
+            transition: width 0.3s ease;
+            animation: shimmer 2s infinite;
+        }
+        
+        .loading-text {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1rem;
+            margin-top: 1rem;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+        }
+        
+        @keyframes shimmer {
+            0% { background-position: -100% 0; }
+            100% { background-position: 100% 0; }
+        }
+        
+        /* Error Screen Critical CSS */
+        .error-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #4c1d95 0%, #7c2d12 50%, #991b1b 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            display: none;
+        }
+        
+        .error-icon {
+            font-size: 4rem;
+            color: #f87171;
+            margin-bottom: 2rem;
+        }
+        
+        .error-title {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            color: #ffffff;
+        }
+        
+        .error-message {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.8);
+            text-align: center;
+            max-width: 500px;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+        
+        .error-button {
+            padding: 12px 24px;
+            background: #dc2626;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .error-button:hover {
+            background: #b91c1c;
+            transform: translateY(-2px);
+        }
+        
+        /* Canvas Container */
+        .canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        
+        /* UI Overlay */
+        .ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+        
+        .ui-overlay > * {
+            pointer-events: auto;
+        }
+    </style>
+    
+    <!-- Build Info (Reemplazado en build) -->
+    <script>
+        window.BUILD_INFO = {
+            version: '1.0.0',
+            buildTime: new Date().toISOString(),
+            environment: 'development',
+            commitHash: 'dev-build',
+            features: {
+                webgl2: true,
+                webxr: false,
+                multiplayer: true,
+                analytics: true
+            }
+        };
+        
+        // Game Configuration
+        window.gameConfig = {
+            debug: true,
+            enableConsoleLog: true,
+            enablePerformanceMonitoring: true,
+            enableErrorReporting: true,
+            serverUrl: window.location.hostname === 'localhost' ? 'ws://localhost:8081' : 'wss://api.crashworm3d.com',
+            cdn: {
+                textures: '/textures/',
+                audio: '/audio/',
+                models: '/models/'
+            }
+        };
+        
+        // Error Handler Global
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            console.error('Global Error:', { msg, url, lineNo, columnNo, error });
+            showErrorScreen('Error de JavaScript', msg);
+            return false;
+        };
+        
+        window.onunhandledrejection = function(event) {
+            console.error('Unhandled Promise Rejection:', event.reason);
+            showErrorScreen('Error de Promesa', event.reason?.message || 'Error desconocido');
+        };
+        
+        // Mostrar pantalla de error
+        function showErrorScreen(title, message) {
+            const errorScreen = document.createElement('div');
+            errorScreen.className = 'error-screen';
+            errorScreen.innerHTML = `
+                <div class="error-icon">⚠️</div>
+                <div class="error-title">${title}</div>
+                <div class="error-message">${message}</div>
+                <button class="error-button" onclick="location.reload()">
+                    Recargar Juego
+                </button>
+            `;
+            errorScreen.style.display = 'flex';
+            document.body.appendChild(errorScreen);
+        }
+        
+        // Feature Detection
+        function checkBrowserSupport() {
+            const required = {
+                webgl: !!window.WebGLRenderingContext,
+                es6: typeof Symbol !== 'undefined',
+                fetch: typeof fetch !== 'undefined',
+                websocket: typeof WebSocket !== 'undefined',
+                audiocontext: !!(window.AudioContext || window.webkitAudioContext),
+                gamepad: !!navigator.getGamepads,
+                fullscreen: !!(document.fullscreenEnabled || document.webkitFullscreenEnabled)
+            };
+            
+            const missing = Object.keys(required).filter(key => !required[key]);
+            
+            if (missing.length > 0) {
+                showErrorScreen(
+                    'Navegador No Compatible',
+                    `Tu navegador no soporta las siguientes características requeridas: ${missing.join(', ')}. Por favor actualiza tu navegador.`
+                );
+                return false;
+            }
+            
+            return true;
+        }
+        
+        // Performance Monitor
+        function initPerformanceMonitor() {
+            if (!window.performance || !window.performance.mark) return;
+            
+            performance.mark('app-start');
+            
+            window.addEventListener('load', () => {
+                performance.mark('app-loaded');
+                performance.measure('app-load-time', 'app-start', 'app-loaded');
+                
+                const measure = performance.getEntriesByName('app-load-time')[0];
+                console.log(`🚀 App loaded in ${measure.duration.toFixed(2)}ms`);
+            });
+        }
+        
+        // Service Worker Registration
+        function registerServiceWorker() {
+            if ('serviceWorker' in navigator && window.BUILD_INFO.environment === 'production') {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('SW registered:', registration);
+                    })
+                    .catch(error => {
+                        console.warn('SW registration failed:', error);
+                    });
+            }
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            if (checkBrowserSupport()) {
+                initPerformanceMonitor();
+                registerServiceWorker();
+            }
+        });
+        
+        // Loading Progress Controller
+        let loadingProgress = 0;
+        function updateLoadingProgress(progress, text = '') {
+            loadingProgress = Math.max(loadingProgress, progress);
+            const progressBar = document.querySelector('.loading-progress');
+            const progressText = document.querySelector('.loading-text');
+            
+            if (progressBar) {
+                progressBar.style.width = `${loadingProgress}%`;
+            }
+            
+            if (progressText && text) {
+                progressText.textContent = text;
+            }
+            
+            if (loadingProgress >= 100) {
+                setTimeout(() => {
+                    const loadingScreen = document.querySelector('.loading-screen');
+                    if (loadingScreen) {
+                        loadingScreen.classList.add('hidden');
+                        setTimeout(() => {
+                            loadingScreen.style.display = 'none';
+                        }, 500);
+                    }
+                }, 500);
+            }
+        }
+        
+        window.updateLoadingProgress = updateLoadingProgress;
+    </script>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-screen">
+        <div class="loading-logo">
+            🎮 CRASH WORM 3D
+        </div>
+        <div class="loading-bar">
+            <div class="loading-progress"></div>
+        </div>
+        <div class="loading-text">Iniciando juego...</div>
+    </div>
+    
+    <!-- Main App Container -->
+    <div id="root"></div>
+    
+    <!-- Fallback para navegadores sin JavaScript -->
+    <noscript>
+        <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a2e; display: flex; align-items: center; justify-content: center; flex-direction: column; color: white; text-align: center; font-family: Arial, sans-serif;">
+            <h1>🎮 Crash Worm 3D Adventure</h1>
+            <p style="margin-top: 20px; font-size: 18px;">Este juego requiere JavaScript para funcionar.</p>
+            <p style="margin-top: 10px;">Por favor habilita JavaScript en tu navegador.</p>
+        </div>
+    </noscript>
+    
+    <!-- Module Script -->
+    <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>

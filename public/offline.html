@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <!-- ======================================== -->
+    <!-- 📡 CRASH WORM 3D - PÁGINA OFFLINE      -->
+    <!-- ======================================== -->
+    <!-- Ubicación: public/offline.html -->
+    
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a1a2e">
+    
+    <title>Sin Conexión - Crash Worm 3D Adventure</title>
+    <meta name="description" content="No hay conexión a internet. Algunos features están disponibles offline.">
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png">
+    
+    <style>
+        /* ======================================== */
+        /* 🎨 ESTILOS CRÍTICOS INLINE             */
+        /* ======================================== */
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #ffffff;
+            overflow: hidden;
+        }
+        
+        .offline-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 2rem;
+            text-align: center;
+            position: relative;
+        }
+        
+        /* Fondo animado */
+        .offline-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 20%, rgba(120, 119, 198, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(255, 119, 198, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(120, 219, 255, 0.1) 0%, transparent 50%);
+            animation: backgroundPulse 4s ease-in-out infinite alternate;
+        }
+        
+        @keyframes backgroundPulse {
+            0% { opacity: 0.3; }
+            100% { opacity: 0.6; }
+        }
+        
+        .offline-content {
+            position: relative;
+            z-index: 1;
+            max-width: 600px;
+        }
+        
+        /* Icono principal */
+        .offline-icon {
+            font-size: 8rem;
+            margin-bottom: 2rem;
+            position: relative;
+            display: inline-block;
+        }
+        
+        .offline-icon::before {
+            content: '📡';
+            display: block;
+            filter: grayscale(1) brightness(0.7);
+            animation: iconPulse 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes iconPulse {
+            0% { 
+                transform: scale(1);
+                filter: grayscale(1) brightness(0.7);
+            }
+            100% { 
+                transform: scale(1.1);
+                filter: grayscale(0.5) brightness(0.9);
+            }
+        }
+        
+        /* Título */
+        .offline-title {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(45deg, #ff6b6b, #feca57, #48dbfb, #ff9ff3);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: titleGlow 3s ease-in-out infinite alternate;
+        }
+        
+        @keyframes titleGlow {
+            0% { opacity: 0.8; }
+            100% { opacity: 1; }
+        }
+        
+        /* Mensaje */
+        .offline-message {
+            font-size: 1.2rem;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        /* Lista de características offline */
+        .offline-features {
+            text-align: left;
+            margin: 2rem 0;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .offline-features h3 {
+            color: #48dbfb;
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+        }
+        
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .feature-list li {
+            padding: 0.5rem 0;
+            position: relative;
+            padding-left: 2rem;
+        }
+        
+        .feature-list li::before {
+            content: '🎮';
+            position: absolute;
+            left: 0;
+            top: 0.5rem;
+        }
+        
+        .feature-list li.unavailable::before {
+            content: '🚫';
+            filter: grayscale(1);
+        }
+        
+        .feature-list li.unavailable {
+            color: rgba(255, 255, 255, 0.5);
+            text-decoration: line-through;
+        }
+        
+        /* Botones */
+        .offline-actions {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 2rem;
+        }
+        
+        .btn {
+            padding: 1rem 2rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            min-width: 150px;
+            justify-content: center;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            backdrop-filter: blur(10px);
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-2px);
+        }
+        
+        /* Estado de conexión */
+        .connection-status {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            padding: 0.8rem 1.2rem;
+            background: rgba(255, 107, 107, 0.9);
+            color: white;
+            border-radius: 25px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            animation: statusPulse 2s ease-in-out infinite;
+        }
+        
+        .connection-status.online {
+            background: rgba(72, 219, 251, 0.9);
+            animation: none;
+        }
+        
+        @keyframes statusPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .offline-container {
+                padding: 1rem;
+            }
+            
+            .offline-icon {
+                font-size: 6rem;
+            }
+            
+            .offline-title {
+                font-size: 2.2rem;
+            }
+            
+            .offline-message {
+                font-size: 1.1rem;
+            }
+            
+            .offline-actions {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .btn {
+                width: 100%;
+                max-width: 250px;
+            }
+            
+            .connection-status {
+                top: 1rem;
+                right: 1rem;
+                font-size: 0.8rem;
+                padding: 0.6rem 1rem;
+            }
+        }
+        
+        /* Animación de entrada */
+        .offline-content {
+            animation: slideInUp 0.8s ease-out;
+        }
+        
+        @keyframes slideInUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        /* Indicador de carga para retry */
+        .loading {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .btn-primary.loading .loading {
+            display: inline-block;
+        }
+        
+        .btn-primary.loading .btn-text {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Estado de conexión -->
+    <div class="connection-status" id="connectionStatus">
+        🔴 Sin conexión
+    </div>
+    
+    <!-- Contenido principal -->
+    <div class="offline-container">
+        <div class="offline-content">
+            <!-- Icono principal -->
+            <div class="offline-icon" aria-label="Sin conexión a internet"></div>
+            
+            <!-- Título -->
+            <h1 class="offline-title">¡Ups! Sin Conexión</h1>
+            
+            <!-- Mensaje principal -->
+            <p class="offline-message">
+                No tienes conexión a internet en este momento, pero no te preocupes:<br>
+                <strong>¡Crash Worm 3D tiene características offline!</strong>
+            </p>
+            
+            <!-- Características disponibles/no disponibles -->
+            <div class="offline-features">
+                <h3>🎮 ¿Qué puedes hacer offline?</h3>
+                <ul class="feature-list">
+                    <li>Jugar modo individual (Single Player)</li>
+                    <li>Acceder a niveles descargados previamente</li>
+                    <li>Ver tu progreso y estadísticas locales</li>
+                    <li>Configurar controles y gráficos</li>
+                    <li>Practicar en modo tutorial</li>
+                    <li class="unavailable">Modo multijugador online</li>
+                    <li class="unavailable">Leaderboards globales</li>
+                    <li class="unavailable">Chat con otros jugadores</li>
+                    <li class="unavailable">Actualización de contenido</li>
+                </ul>
+            </div>
+            
+            <!-- Acciones disponibles -->
+            <div class="offline-actions">
+                <button class="btn btn-primary" onclick="retryConnection()" id="retryBtn">
+                    <div class="loading"></div>
+                    <span class="btn-text">🔄 Reintentar Conexión</span>
+                </button>
+                
+                <a href="/" class="btn btn-secondary">
+                    🎮 Jugar Offline
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // ========================================
+        // 🔧 FUNCIONALIDAD OFFLINE
+        // ========================================
+        
+        // Variables globales
+        let isOnline = navigator.onLine;
+        let retryAttempts = 0;
+        const maxRetryAttempts = 5;
+        
+        // Referencias DOM
+        const connectionStatus = document.getElementById('connectionStatus');
+        const retryBtn = document.getElementById('retryBtn');
+        
+        // ========================================
+        // 🌐 DETECCIÓN DE CONEXIÓN
+        // ========================================
+        
+        function updateConnectionStatus() {
+            isOnline = navigator.onLine;
+            
+            if (isOnline) {
+                connectionStatus.textContent = '🟢 Conectado';
+                connectionStatus.className = 'connection-status online';
+                
+                // Auto-redirect si está online
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 2000);
+            } else {
+                connectionStatus.textContent = '🔴 Sin conexión';
+                connectionStatus.className = 'connection-status';
+            }
+        }
+        
+        // Event listeners para cambios de conexión
+        window.addEventListener('online', updateConnectionStatus);
+        window.addEventListener('offline', updateConnectionStatus);
+        
+        // ========================================
+        // 🔄 RETRY DE CONEXIÓN
+        // ========================================
+        
+        async function retryConnection() {
+            if (retryAttempts >= maxRetryAttempts) {
+                showMaxRetriesMessage();
+                return;
+            }
+            
+            retryAttempts++;
+            
+            // Mostrar estado de carga
+            retryBtn.classList.add('loading');
+            retryBtn.disabled = true;
+            
+            try {
+                // Intentar fetch a un endpoint ligero
+                const response = await fetch('/health.json', {
+                    method: 'GET',
+                    cache: 'no-cache',
+                    headers: {
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+                
+                if (response.ok) {
+                    // Conexión exitosa
+                    showSuccessMessage();
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 1500);
+                } else {
+                    throw new Error('Server unreachable');
+                }
+            } catch (error) {
+                console.warn('Retry failed:', error);
+                showRetryFailedMessage();
+            } finally {
+                // Remover estado de carga
+                retryBtn.classList.remove('loading');
+                retryBtn.disabled = false;
+            }
+        }
+        
+        // ========================================
+        // 📢 MENSAJES DE ESTADO
+        // ========================================
+        
+        function showSuccessMessage() {
+            const message = document.createElement('div');
+            message.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(72, 219, 251, 0.95);
+                color: white;
+                padding: 1rem 2rem;
+                border-radius: 25px;
+                font-weight: 600;
+                z-index: 1000;
+                backdrop-filter: blur(10px);
+                animation: slideInUp 0.5s ease-out;
+            `;
+            message.textContent = '✅ ¡Conexión restaurada! Redirigiendo...';
+            document.body.appendChild(message);
+            
+            setTimeout(() => {
+                document.body.removeChild(message);
+            }, 3000);
+        }
+        
+        function showRetryFailedMessage() {
+            const message = document.createElement('div');
+            message.style.cssText = `
+                position: fixed;
+                bottom: 2rem;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(255, 107, 107, 0.95);
+                color: white;
+                padding: 0.8rem 1.5rem;
+                border-radius: 20px;
+                font-weight: 500;
+                z-index: 1000;
+                backdrop-filter: blur(10px);
+                animation: slideInUp 0.5s ease-out;
+            `;
+            message.textContent = `❌ Intento ${retryAttempts} fallido. Verifica tu conexión.`;
+            document.body.appendChild(message);
+            
+            setTimeout(() => {
+                document.body.removeChild(message);
+            }, 3000);
+        }
+        
+        function showMaxRetriesMessage() {
+            const message = document.createElement('div');
+            message.style.cssText = `
+                position: fixed;
+                bottom: 2rem;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(255, 159, 67, 0.95);
+                color: white;
+                padding: 1rem 2rem;
+                border-radius: 25px;
+                font-weight: 500;
+                z-index: 1000;
+                backdrop-filter: blur(10px);
+                text-align: center;
+                max-width: 300px;
+            `;
+            message.innerHTML = `
+                ⚠️ Máximo de intentos alcanzado<br>
+                <small>Intenta más tarde o juega offline</small>
+            `;
+            document.body.appendChild(message);
+            
+            // Deshabilitar botón por un tiempo
+            retryBtn.disabled = true;
+            retryBtn.textContent = '⏳ Espera un momento...';
+            
+            setTimeout(() => {
+                document.body.removeChild(message);
+                retryBtn.disabled = false;
+                retryBtn.innerHTML = '<span class="btn-text">🔄 Reintentar Conexión</span>';
+                retryAttempts = 0; // Reset counter
+            }, 30000); // 30 segundos
+        }
+        
+        // ========================================
+        // 🎮 FUNCIONALIDAD DE JUEGO OFFLINE
+        // ========================================
+        
+        // Verificar si hay datos de juego en cache
+        function checkOfflineGameData() {
+            try {
+                const hasOfflineData = localStorage.getItem('crash-worm-offline-data');
+                const hasGameProgress = localStorage.getItem('crash-worm-progress');
+                
+                if (hasOfflineData || hasGameProgress) {
+                    // Mostrar indicador de datos disponibles
+                    const indicator = document.createElement('div');
+                    indicator.style.cssText = `
+                        position: absolute;
+                        top: -10px;
+                        right: -10px;
+                        width: 20px;
+                        height: 20px;
+                        background: #48dbfb;
+                        border-radius: 50%;
+                        border: 2px solid white;
+                    `;
+                    
+                    const offlineBtn = document.querySelector('a[href="/"]');
+                    if (offlineBtn) {
+                        offlineBtn.style.position = 'relative';
+                        offlineBtn.appendChild(indicator);
+                    }
+                }
+            } catch (error) {
+                console.warn('Error checking offline data:', error);
+            }
+        }
+        
+        // ========================================
+        // 🚀 INICIALIZACIÓN
+        // ========================================
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            updateConnectionStatus();
+            checkOfflineGameData();
+            
+            // Auto-retry cada 30 segundos si no hay intentos manuales
+            setInterval(() => {
+                if (retryAttempts === 0 && !navigator.onLine) {
+                    retryConnection();
+                }
+            }, 30000);
+        });
+        
+        // Prevenir cache de esta página
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistration().then(registration => {
+                if (registration) {
+                    registration.update();
+                }
+            });
+        }
+        
+        // Analytics offline (si está disponible)
+        if (window.analytics && typeof window.analytics.track === 'function') {
+            window.analytics.track('Page Viewed', {
+                page: 'offline',
+                timestamp: new Date().toISOString(),
+                userAgent: navigator.userAgent,
+                connectionType: navigator.connection?.effectiveType || 'unknown'
+            });
+        }
+    </script>
+</body>
+</html>

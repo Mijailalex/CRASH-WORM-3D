@@ -1,0 +1,553 @@
+# ============================================================================
+# 🐳 CRASH WORM 3D - DOCKER COMPOSE CONFIGURATION
+# ============================================================================
+# Ubicación: docker-compose.yml
+# Orquestación completa de servicios para desarrollo y producción
+
+version: '3.8'
+
+# ========================================
+# 🌐 NETWORKS
+# ========================================
+networks:
+  crashworm3d-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+  
+  monitoring-network:
+    driver: bridge
+    internal: true
+
+# ========================================
+# 💾 VOLUMES
+# ========================================
+volumes:
+  # Datos persistentes
+  game-data:
+    driver: local
+  
+  # Base de datos
+  postgres-data:
+    driver: local
+  
+  # Cache Redis
+  redis-data:
+    driver: local
+  
+  # Logs del sistema
+  nginx-logs:
+    driver: local
+  
+  server-logs:
+    driver: local
+  
+  # Certificados SSL
+  ssl-certs:
+    driver: local
+  
+  # Backup de datos
+  backups:
+    driver: local
+
+# ========================================
+# 🛠️ SERVICES
+# ========================================
+services:
+
+  # ========================================
+  # 🎮 FRONTEND - Cliente del Juego
+  # ========================================
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+      args:
+        - NODE_ENV=production
+        - BUILD_VERSION=${BUILD_VERSION:-1.0.0}
+        - GIT_COMMIT=${GIT_COMMIT:-unknown}
+    
+    container_name: crashworm3d-frontend
+    hostname: frontend
+    
+    ports:
+      - "80:80"
+      - "443:443"
+    
+    volumes:
+      - nginx-logs:/var/log/nginx
+      - ssl-certs:/etc/ssl/certs:ro
+      - ./public/icons:/usr/share/nginx/html/icons:ro
+      - ./public/textures:/usr/share/nginx/html/textures:ro
+      - ./public/audio:/usr/share/nginx/html/audio:ro
+    
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - API_BACKEND_URL=http://backend:8080
+      - WEBSOCKET_BACKEND_URL=http://websocket:8081
+      - NGINX_WORKER_PROCESSES=${NGINX_WORKERS:-auto}
+      - NGINX_CLIENT_MAX_BODY_SIZE=50M
+      - SECURITY_HEADERS=true
+      - ENABLE_METRICS=true
+      - DEBUG=${DEBUG:-false}
+    
+    depends_on:
+      - backend
+      - websocket
+      - redis
+    
+    networks:
+      - crashworm3d-network
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`crashworm3d.local`)"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+
+  # ========================================
+  # 🎯 BACKEND - API del Juego
+  # ========================================
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    
+    container_name: crashworm3d-backend
+    hostname: backend
+    
+    ports:
+      - "8080:8080"
+    
+    volumes:
+      - server-logs:/app/logs
+      - game-data:/app/data
+      - backups:/app/backups
+    
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=8080
+      - DATABASE_URL=postgresql://gameuser:${POSTGRES_PASSWORD}@postgres:5432/crashworm3d
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - RATE_LIMIT_MAX=1000
+      - RATE_LIMIT_WINDOW=900000
+      - ENABLE_ANALYTICS=true
+      - DEBUG=${DEBUG:-false}
+    
+    depends_on:
+      - postgres
+      - redis
+    
+    networks:
+      - crashworm3d-network
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ========================================
+  # 🔌 WEBSOCKET - Servidor Multijugador
+  # ========================================
+  websocket:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.websocket
+    
+    container_name: crashworm3d-websocket
+    hostname: websocket
+    
+    ports:
+      - "8081:8081"
+    
+    volumes:
+      - server-logs:/app/logs
+      - game-data:/app/data
+    
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - WEBSOCKET_PORT=8081
+      - REDIS_URL=redis://redis:6379
+      - MAX_PLAYERS_PER_ROOM=16
+      - ROOM_TIMEOUT=300000
+      - ENABLE_VOICE_CHAT=false
+      - ANTICHEAT_ENABLED=true
+      - DEBUG=${DEBUG:-false}
+    
+    depends_on:
+      - redis
+      - postgres
+    
+    networks:
+      - crashworm3d-network
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ========================================
+  # 🗄️ POSTGRES - Base de Datos Principal
+  # ========================================
+  postgres:
+    image: postgres:15-alpine
+    
+    container_name: crashworm3d-postgres
+    hostname: postgres
+    
+    ports:
+      - "5432:5432"
+    
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+      - backups:/backups
+    
+    environment:
+      - POSTGRES_DB=crashworm3d
+      - POSTGRES_USER=gameuser
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS="--auth-host=md5"
+    
+    networks:
+      - crashworm3d-network
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gameuser -d crashworm3d"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    
+    command: >
+      postgres
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+
+  # ========================================
+  # 🔴 REDIS - Cache y Sesiones
+  # ========================================
+  redis:
+    image: redis:7-alpine
+    
+    container_name: crashworm3d-redis
+    hostname: redis
+    
+    ports:
+      - "6379:6379"
+    
+    volumes:
+      - redis-data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    
+    networks:
+      - crashworm3d-network
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+    
+    command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${REDIS_PASSWORD}
+
+  # ========================================
+  # 📊 MONITORING - Prometheus
+  # ========================================
+  prometheus:
+    image: prom/prometheus:latest
+    
+    container_name: crashworm3d-prometheus
+    hostname: prometheus
+    
+    ports:
+      - "9090:9090"
+    
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules:/etc/prometheus/rules:ro
+    
+    networks:
+      - crashworm3d-network
+      - monitoring-network
+    
+    restart: unless-stopped
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+
+  # ========================================
+  # 📈 GRAFANA - Dashboards
+  # ========================================
+  grafana:
+    image: grafana/grafana:latest
+    
+    container_name: crashworm3d-grafana
+    hostname: grafana
+    
+    ports:
+      - "3001:3000"
+    
+    volumes:
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_DOMAIN=${GRAFANA_DOMAIN:-localhost}
+    
+    depends_on:
+      - prometheus
+    
+    networks:
+      - monitoring-network
+    
+    restart: unless-stopped
+
+  # ========================================
+  # 📋 NGINX EXPORTER - Métricas Web Server
+  # ========================================
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:latest
+    
+    container_name: crashworm3d-nginx-exporter
+    hostname: nginx-exporter
+    
+    ports:
+      - "9113:9113"
+    
+    environment:
+      - SCRAPE_URI=http://frontend/nginx_status
+    
+    depends_on:
+      - frontend
+    
+    networks:
+      - crashworm3d-network
+      - monitoring-network
+    
+    restart: unless-stopped
+
+  # ========================================
+  # 📊 NODE EXPORTER - Métricas del Sistema
+  # ========================================
+  node-exporter:
+    image: prom/node-exporter:latest
+    
+    container_name: crashworm3d-node-exporter
+    hostname: node-exporter
+    
+    ports:
+      - "9100:9100"
+    
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    
+    networks:
+      - monitoring-network
+    
+    restart: unless-stopped
+    
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+
+  # ========================================
+  # 🔄 BACKUP SERVICE
+  # ========================================
+  backup:
+    build:
+      context: ./scripts
+      dockerfile: Dockerfile.backup
+    
+    container_name: crashworm3d-backup
+    hostname: backup
+    
+    volumes:
+      - postgres-data:/data/postgres:ro
+      - game-data:/data/game:ro
+      - backups:/backups
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - BACKUP_SCHEDULE=${BACKUP_SCHEDULE:-0 2 * * *}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-7}
+    
+    depends_on:
+      - postgres
+    
+    networks:
+      - crashworm3d-network
+    
+    restart: unless-stopped
+
+  # ========================================
+  # ⚖️ LOAD BALANCER (HAProxy) - Opcional
+  # ========================================
+  loadbalancer:
+    image: haproxy:2.8-alpine
+    
+    container_name: crashworm3d-lb
+    hostname: loadbalancer
+    
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8404:8404"  # Stats
+    
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ssl-certs:/etc/ssl/certs:ro
+    
+    depends_on:
+      - frontend
+    
+    networks:
+      - crashworm3d-network
+    
+    restart: unless-stopped
+    
+    profiles:
+      - loadbalancer
+
+  # ========================================
+  # 🔍 ELASTICSEARCH - Logs y Búsqueda
+  # ========================================
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    
+    container_name: crashworm3d-elasticsearch
+    hostname: elasticsearch
+    
+    ports:
+      - "9200:9200"
+    
+    volumes:
+      - ./elasticsearch/data:/usr/share/elasticsearch/data
+      - ./elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+    
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    
+    networks:
+      - crashworm3d-network
+    
+    restart: unless-stopped
+    
+    profiles:
+      - elk
+
+  # ========================================
+  # 📊 KIBANA - Visualización de Logs
+  # ========================================
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    
+    container_name: crashworm3d-kibana
+    hostname: kibana
+    
+    ports:
+      - "5601:5601"
+    
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    
+    depends_on:
+      - elasticsearch
+    
+    networks:
+      - crashworm3d-network
+    
+    restart: unless-stopped
+    
+    profiles:
+      - elk
+
+# ========================================
+# 🔧 DEVELOPMENT OVERRIDES
+# ========================================
+# Para usar en desarrollo:
+# docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+---
+# docker-compose.dev.yml (desarrollo)
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      target: builder
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - DEBUG=true
+    ports:
+      - "3000:3000"
+    command: npm run dev
+
+  backend:
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - DEBUG=true
+    command: npm run dev
+
+  postgres:
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=dev_password
+
+  redis:
+    ports:
+      - "6379:6379"
+    environment:
+      - REDIS_PASSWORD=dev_password

@@ -1,0 +1,304 @@
+{
+  "name": "Crash Worm 3D Adventure",
+  "short_name": "CrashWorm3D",
+  "description": "Emocionante juego de plataformas 3D multijugador con gráficos avanzados y física realista. Explora mundos increíbles, compite con amigos y vive aventuras épicas.",
+  "version": "1.0.0",
+  "manifest_version": 2,
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone", "minimal-ui"],
+  "orientation": "landscape-primary",
+  "theme_color": "#1a1a2e",
+  "background_color": "#1a1a2e",
+  "lang": "es",
+  "dir": "ltr",
+  "categories": ["games", "entertainment", "social"],
+  
+  "icons": [
+    {
+      "src": "/icons/icon-72x72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-maskable-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+
+  "screenshots": [
+    {
+      "src": "/screenshots/gameplay-desktop-1.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "platform": "wide",
+      "label": "Gameplay principal - Exploración de mundos 3D"
+    },
+    {
+      "src": "/screenshots/gameplay-desktop-2.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "platform": "wide",
+      "label": "Modo multijugador - Hasta 16 jugadores"
+    },
+    {
+      "src": "/screenshots/gameplay-mobile-1.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "platform": "narrow",
+      "label": "Interfaz móvil - Controles táctiles optimizados"
+    },
+    {
+      "src": "/screenshots/gameplay-mobile-2.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "platform": "narrow",
+      "label": "Menú principal - Diseño responsive"
+    }
+  ],
+
+  "shortcuts": [
+    {
+      "name": "Juego Rápido",
+      "short_name": "Jugar",
+      "description": "Comenzar una partida rápida",
+      "url": "/quick-play",
+      "icons": [
+        {
+          "src": "/icons/shortcut-play.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Multijugador",
+      "short_name": "Online",
+      "description": "Unirse a partida multijugador",
+      "url": "/multiplayer",
+      "icons": [
+        {
+          "src": "/icons/shortcut-multiplayer.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Configuración",
+      "short_name": "Config",
+      "description": "Configurar controles y gráficos",
+      "url": "/settings",
+      "icons": [
+        {
+          "src": "/icons/shortcut-settings.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Logros",
+      "short_name": "Logros",
+      "description": "Ver progreso y logros",
+      "url": "/achievements",
+      "icons": [
+        {
+          "src": "/icons/shortcut-achievements.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+
+  "features": [
+    "Cross Platform",
+    "Multiplayer",
+    "Offline Play",
+    "Gamepad Support",
+    "VR Ready",
+    "3D Graphics",
+    "Real-time Physics",
+    "Social Features"
+  ],
+
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=com.crashworm3d.game",
+      "id": "com.crashworm3d.game"
+    },
+    {
+      "platform": "itunes",
+      "url": "https://apps.apple.com/app/crash-worm-3d/id123456789",
+      "id": "123456789"
+    },
+    {
+      "platform": "webapp",
+      "url": "https://crashworm3d.com/app"
+    }
+  ],
+
+  "prefer_related_applications": false,
+
+  "protocol_handlers": [
+    {
+      "protocol": "crashworm",
+      "url": "/join?room=%s"
+    },
+    {
+      "protocol": "web+crashworm",
+      "url": "/join?invite=%s"
+    }
+  ],
+
+  "file_handlers": [
+    {
+      "action": "/replay",
+      "accept": {
+        "application/x-crashworm-replay": [".replay", ".cwreplay"]
+      },
+      "icons": [
+        {
+          "src": "/icons/file-replay.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "action": "/level",
+      "accept": {
+        "application/x-crashworm-level": [".level", ".cwlevel"]
+      },
+      "icons": [
+        {
+          "src": "/icons/file-level.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "screenshot",
+          "accept": ["image/*"]
+        },
+        {
+          "name": "replay",
+          "accept": [".replay", ".cwreplay"]
+        }
+      ]
+    }
+  },
+
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
+
+  "permissions": [
+    "gamepad",
+    "fullscreen",
+    "wake-lock",
+    "persistent-storage"
+  ],
+
+  "capabilities": {
+    "gamepad": {
+      "required": false,
+      "preferred": true
+    },
+    "fullscreen": {
+      "required": false,
+      "preferred": true
+    },
+    "orientation-lock": {
+      "required": false,
+      "preferred": true
+    },
+    "wake-lock": {
+      "required": false,
+      "preferred": true
+    },
+    "web-share": {
+      "required": false,
+      "preferred": true
+    }
+  },
+
+  "handle_links": "preferred",
+
+  "developer": {
+    "name": "Crash Worm 3D Team",
+    "url": "https://crashworm3d.com/team"
+  },
+
+  "iarc_rating_id": "e58c174a-81d2-5c3c-32cc-34b8de7a52e9"
+}

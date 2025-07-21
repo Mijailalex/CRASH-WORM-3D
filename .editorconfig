@@ -1,0 +1,286 @@
+# ============================================================================
+# 📝 CRASH WORM 3D - EDITOR CONFIGURATION
+# ============================================================================
+# Ubicación: .editorconfig
+# Configuración universal para mantener consistencia entre editores
+# Soportado por VS Code, WebStorm, Sublime Text, Vim, Emacs y más
+
+# Indicar que este es el archivo raíz
+root = true
+
+# ========================================
+# 🌍 CONFIGURACIÓN GLOBAL
+# ========================================
+[*]
+# Conjunto de caracteres
+charset = utf-8
+
+# Tipo de final de línea (LF para compatibilidad Unix/Linux/macOS)
+end_of_line = lf
+
+# Insertar línea final al final del archivo
+insert_final_newline = true
+
+# Remover espacios en blanco al final de las líneas
+trim_trailing_whitespace = true
+
+# Indentación con espacios
+indent_style = space
+indent_size = 2
+
+# Ancho máximo de línea (guía visual)
+max_line_length = 100
+
+# ========================================
+# ⚛️ ARCHIVOS REACT/JAVASCRIPT/TYPESCRIPT
+# ========================================
+[*.{js,jsx,ts,tsx,mjs,cjs}]
+indent_size = 2
+max_line_length = 100
+
+# Configuración específica para archivos de configuración JS
+[*.config.{js,ts,mjs,cjs}]
+indent_size = 2
+max_line_length = 120
+
+# ========================================
+# 🎨 ARCHIVOS DE ESTILO
+# ========================================
+[*.{css,scss,sass,less,styl}]
+indent_size = 2
+max_line_length = 120
+
+# ========================================
+# 🏗️ ARCHIVOS DE CONFIGURACIÓN
+# ========================================
+
+# JSON (mantener formato estricto)
+[*.json]
+indent_size = 2
+max_line_length = 120
+
+# YAML (Docker Compose, GitHub Actions, etc.)
+[*.{yml,yaml}]
+indent_size = 2
+max_line_length = 120
+
+# TOML (configuraciones Rust, etc.)
+[*.toml]
+indent_size = 2
+
+# XML/SVG
+[*.{xml,svg}]
+indent_size = 2
+max_line_length = 120
+
+# ========================================
+# 📝 ARCHIVOS DE DOCUMENTACIÓN
+# ========================================
+
+# Markdown
+[*.md]
+indent_size = 2
+max_line_length = 120
+# No remover espacios al final (necesarios para saltos de línea en MD)
+trim_trailing_whitespace = false
+
+# Archivos de texto plano
+[*.txt]
+indent_size = 2
+max_line_length = 80
+
+# ========================================
+# 🐳 ARCHIVOS DOCKER
+# ========================================
+[Dockerfile*]
+indent_size = 2
+max_line_length = 120
+
+[docker-compose*.yml]
+indent_size = 2
+max_line_length = 120
+
+# ========================================
+# 🌐 ARCHIVOS WEB
+# ========================================
+
+# HTML
+[*.{html,htm}]
+indent_size = 2
+max_line_length = 120
+
+# Templates
+[*.{hbs,handlebars,mustache,twig}]
+indent_size = 2
+max_line_length = 120
+
+# ========================================
+# 🗄️ ARCHIVOS DE DATOS
+# ========================================
+
+# CSV (usar tabs para mejor compatibilidad)
+[*.csv]
+indent_style = tab
+trim_trailing_whitespace = false
+
+# SQL
+[*.sql]
+indent_size = 2
+max_line_length = 120
+
+# ========================================
+# 🔧 ARCHIVOS DE CONFIGURACIÓN ESPECÍFICOS
+# ========================================
+
+# ESLint
+[.eslintrc*]
+indent_size = 2
+
+# Prettier
+[.prettierrc*]
+indent_size = 2
+
+# Babel
+[.babelrc*]
+indent_size = 2
+
+# PostCSS
+[postcss.config.*]
+indent_size = 2
+
+# Stylelint
+[.stylelintrc*]
+indent_size = 2
+
+# ========================================
+# 📦 PACKAGE MANAGERS
+# ========================================
+
+# package.json y similares
+[package*.json]
+indent_size = 2
+
+# npm configuration
+[.npmrc]
+indent_style = space
+indent_size = 2
+
+# Yarn configuration
+[.yarnrc*]
+indent_size = 2
+
+# pnpm configuration
+[.pnpmrc]
+indent_size = 2
+
+# ========================================
+# 🔒 ARCHIVOS DE ENTORNO Y SECRETOS
+# ========================================
+
+# Variables de entorno
+[.env*]
+indent_size = 2
+# No insertar línea final (puede causar problemas en algunos casos)
+insert_final_newline = false
+
+# ========================================
+# 🧪 ARCHIVOS DE TESTING
+# ========================================
+
+# Jest configuration
+[jest.config.*]
+indent_size = 2
+
+# Vitest configuration
+[vitest.config.*]
+indent_size = 2
+
+# Playwright configuration
+[playwright.config.*]
+indent_size = 2
+
+# ========================================
+# 🚀 CI/CD
+# ========================================
+
+# GitHub Actions
+[.github/workflows/*.{yml,yaml}]
+indent_size = 2
+max_line_length = 120
+
+# GitLab CI
+[.gitlab-ci.yml]
+indent_size = 2
+max_line_length = 120
+
+# ========================================
+# 📊 ARCHIVOS DE LOGS
+# ========================================
+[*.log]
+indent_size = 2
+# No modificar logs automáticamente
+trim_trailing_whitespace = false
+insert_final_newline = false
+
+# ========================================
+# 🎮 ARCHIVOS ESPECÍFICOS DEL JUEGO
+# ========================================
+
+# Shaders GLSL
+[*.{glsl,vert,frag,vs,fs}]
+indent_size = 2
+max_line_length = 120
+
+# Archivos de configuración de assets
+[*.{atlas,json}]
+indent_size = 2
+
+# ========================================
+# 🔍 ARCHIVOS ESPECIALES
+# ========================================
+
+# Makefile (requiere tabs)
+[{Makefile,makefile,*.mk}]
+indent_style = tab
+indent_size = 4
+
+# Go files (convención de tabs)
+[*.go]
+indent_style = tab
+indent_size = 4
+
+# Python (PEP 8)
+[*.py]
+indent_size = 4
+max_line_length = 88
+
+# ========================================
+# 📋 NOTAS DE CONFIGURACIÓN
+# ========================================
+
+# IMPORTANTE:
+# 1. Esta configuración se aplica automáticamente en editores compatibles
+# 2. VS Code: Instalar extensión "EditorConfig for VS Code"
+# 3. WebStorm/IntelliJ: Soporte nativo incluido
+# 4. Sublime Text: Instalar package "EditorConfig"
+# 5. Vim: Instalar plugin editorconfig-vim
+# 6. Emacs: Instalar editorconfig-emacs
+
+# VERIFICACIÓN:
+# Para verificar que la configuración funciona:
+# 1. Abrir cualquier archivo del proyecto
+# 2. Verificar que la indentación y EOL coincidan con esta config
+# 3. Crear un archivo nuevo y verificar que se apliquen las reglas
+
+# CONFLICTOS:
+# Si hay conflictos con Prettier o ESLint:
+# 1. EditorConfig tiene prioridad sobre configuración del editor
+# 2. Prettier y ESLint pueden sobrescribir EditorConfig
+# 3. Asegurar que todas las configuraciones sean consistentes
+
+# DEBUGGING:
+# Si EditorConfig no funciona:
+# 1. Verificar que el archivo esté en la raíz del proyecto
+# 2. Verificar que el editor tenga soporte/plugin instalado
+# 3. Verificar sintaxis del archivo (no espacios extras, etc.)
+# 4. Reiniciar el editor después de cambios

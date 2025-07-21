@@ -1,731 +1,571 @@
-// ========================================
-// SISTEMA DE ACTUALIZACIONES Y PARCHES
-// Update Manager, Patch System, Version Control
-// ========================================
+// ============================================================================
+// 🔄 CRASH WORM 3D - SISTEMA DE UPDATES Y PATCHES COMPLETO
+// ============================================================================
+// Ubicación: src/core/UpdatePatch.js
+// Sistema avanzado de actualizaciones en tiempo real con seguridad
 
-import { Logger } from './MonitoringSystem';
+// Importaciones de seguridad y logging
+import { Logger } from './MonitoringLogging.js';
+import { SecurityManager } from './SecurityNetworking.js';
 
-// ========================================
-// UPDATE MANAGER
-// ========================================
+// ============================================================================
+// 📦 UPDATE MANAGER - Gestión de Actualizaciones
+// ============================================================================
 
 export class UpdateManager {
-  constructor(config = {}) {
+  constructor(options = {}) {
     this.config = {
-      enabled: config.enabled !== false,
-      updateCheckInterval: config.updateCheckInterval || 300000, // 5 minutos
-      updateEndpoint: config.updateEndpoint || '/api/updates',
-      autoUpdate: config.autoUpdate || false,
-      forceUpdateThreshold: config.forceUpdateThreshold || 3, // Versiones
-      downloadTimeout: config.downloadTimeout || 30000,
-      ...config
+      autoCheck: options.autoCheck !== false,
+      checkInterval: options.checkInterval || 30000, // 30 segundos
+      updateEndpoint: options.updateEndpoint || '/api/updates',
+      enableHotReload: options.enableHotReload !== false,
+      maxRetries: options.maxRetries || 3,
+      timeout: options.timeout || 10000,
+      ...options
     };
 
+    this.logger = new Logger('UpdateManager');
+    this.security = new SecurityManager();
     this.currentVersion = this.getCurrentVersion();
-    this.updateHistory = [];
-    this.pendingUpdates = new Map();
-    this.updateCheckTimer = null;
-    this.downloadCache = new Map();
-    this.logger = new Logger({ context: 'UpdateManager' });
-    
-    this.initializeUpdateManager();
+    this.isChecking = false;
+    this.lastCheck = null;
+    this.updateAvailable = false;
+    this.pendingUpdate = null;
+    this.retryCount = 0;
+
+    this.init();
   }
 
-  initializeUpdateManager() {
-    this.loadUpdateHistory();
-    this.setupServiceWorker();
-    this.startUpdateChecking();
+  init() {
+    this.logger.info('Inicializando UpdateManager', { version: this.currentVersion });
     
-    this.logger.info('Update Manager inicializado', {
-      currentVersion: this.currentVersion,
-      autoUpdate: this.config.autoUpdate
-    });
+    if (this.config.autoCheck) {
+      this.startAutoCheck();
+    }
+
+    // Listener para updates manuales
+    this.setupEventListeners();
   }
 
   getCurrentVersion() {
     return window.BUILD_INFO?.version || '1.0.0';
   }
 
-  loadUpdateHistory() {
-    try {
-      const stored = localStorage.getItem('crashworm_update_history');
-      if (stored) {
-        this.updateHistory = JSON.parse(stored);
-      }
-    } catch (error) {
-      this.logger.error('Error loading update history', {}, error);
+  startAutoCheck() {
+    if (this.checkInterval) {
+      clearInterval(this.checkInterval);
     }
-  }
 
-  saveUpdateHistory() {
-    try {
-      localStorage.setItem('crashworm_update_history', JSON.stringify(this.updateHistory));
-    } catch (error) {
-      this.logger.error('Error saving update history', {}, error);
-    }
-  }
-
-  setupServiceWorker() {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
-        .then(registration => {
-          this.logger.info('Service Worker registrado', {
-            scope: registration.scope
-          });
-          
-          // Escuchar actualizaciones del service worker
-          registration.addEventListener('updatefound', () => {
-            this.handleServiceWorkerUpdate(registration);
-          });
-        })
-        .catch(error => {
-          this.logger.error('Error registrando Service Worker', {}, error);
-        });
-    }
-  }
-
-  handleServiceWorkerUpdate(registration) {
-    const newWorker = registration.installing;
-    
-    newWorker.addEventListener('statechange', () => {
-      if (newWorker.state === 'installed') {
-        if (navigator.serviceWorker.controller) {
-          // Nueva versión disponible
-          this.notifyUpdateAvailable('service-worker', {
-            type: 'service-worker',
-            version: 'latest',
-            description: 'Nueva versión del juego disponible'
-          });
-        }
-      }
-    });
-  }
-
-  startUpdateChecking() {
-    if (!this.config.enabled) return;
-    
-    // Verificar inmediatamente
-    this.checkForUpdates();
-    
-    // Verificar periódicamente
-    this.updateCheckTimer = setInterval(() => {
+    this.checkInterval = setInterval(() => {
       this.checkForUpdates();
-    }, this.config.updateCheckInterval);
+    }, this.config.checkInterval);
+
+    // Check inmediato
+    setTimeout(() => this.checkForUpdates(), 1000);
+  }
+
+  stopAutoCheck() {
+    if (this.checkInterval) {
+      clearInterval(this.checkInterval);
+      this.checkInterval = null;
+    }
   }
 
   async checkForUpdates() {
+    if (this.isChecking) {
+      return;
+    }
+
+    this.isChecking = true;
+    this.lastCheck = Date.now();
+
     try {
-      this.logger.debug('Verificando actualizaciones...');
+      const updateInfo = await this.fetchUpdateInfo();
       
+      if (updateInfo && this.isNewerVersion(updateInfo.version)) {
+        this.updateAvailable = true;
+        this.pendingUpdate = updateInfo;
+        this.notifyUpdateAvailable(updateInfo);
+        return updateInfo;
+      } else {
+        this.updateAvailable = false;
+        this.pendingUpdate = null;
+      }
+    } catch (error) {
+      this.logger.error('Error checking for updates', { error });
+      this.handleUpdateCheckError(error);
+    } finally {
+      this.isChecking = false;
+    }
+  }
+
+  async fetchUpdateInfo() {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+
+    try {
       const response = await fetch(this.config.updateEndpoint, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'X-Current-Version': this.currentVersion
-        }
+          'X-Current-Version': this.currentVersion,
+          'X-Game-ID': 'crash-worm-3d',
+          ...this.security.getAuthHeaders()
+        },
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`Update check failed: ${response.status}`);
       }
 
       const updateInfo = await response.json();
-      this.processUpdateInfo(updateInfo);
       
+      // Validar respuesta
+      this.validateUpdateInfo(updateInfo);
+      
+      return updateInfo;
     } catch (error) {
-      this.logger.error('Error checking for updates', {}, error);
-      
-      // Fallback a verificación mock en desarrollo
-      if (process.env.NODE_ENV === 'development') {
-        this.simulateUpdateCheck();
-      }
+      clearTimeout(timeoutId);
+      throw error;
     }
   }
 
-  simulateUpdateCheck() {
-    // Simular diferentes tipos de actualizaciones
-    const updateTypes = [
-      {
-        type: 'patch',
-        version: '1.0.1',
-        size: 5.2, // MB
-        description: 'Corrección de bugs menores',
-        critical: false,
-        changes: [
-          'Corregido problema con salto doble',
-          'Mejorado rendimiento en nivel 3',
-          'Corregidos errores de audio'
-        ]
-      },
-      {
-        type: 'minor',
-        version: '1.1.0',
-        size: 25.8,
-        description: 'Nuevas características y mejoras',
-        critical: false,
-        changes: [
-          'Nuevo bioma: Mundo Cyberpunk',
-          'Sistema de logros mejorado',
-          'Nuevos power-ups disponibles',
-          'Mejoras en la IA de enemigos'
-        ]
-      },
-      {
-        type: 'major',
-        version: '2.0.0',
-        size: 150.5,
-        description: 'Actualización mayor con nuevas funcionalidades',
-        critical: true,
-        changes: [
-          'Modo multijugador cooperativo',
-          'Editor de niveles integrado',
-          'Nuevo motor de física',
-          'Soporte para VR'
-        ]
+  validateUpdateInfo(updateInfo) {
+    if (!updateInfo || typeof updateInfo !== 'object') {
+      throw new Error('Invalid update info format');
+    }
+
+    const required = ['version', 'type', 'size'];
+    for (const field of required) {
+      if (!updateInfo[field]) {
+        throw new Error(`Missing required update field: ${field}`);
       }
+    }
+
+    // Validar tamaño máximo
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (updateInfo.size > maxSize) {
+      throw new Error(`Update size ${updateInfo.size} exceeds maximum ${maxSize}`);
+    }
+  }
+
+  isNewerVersion(newVersion) {
+    return this.compareVersions(newVersion, this.currentVersion) > 0;
+  }
+
+  compareVersions(a, b) {
+    const partsA = a.split('.').map(Number);
+    const partsB = b.split('.').map(Number);
+    
+    for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+      const partA = partsA[i] || 0;
+      const partB = partsB[i] || 0;
+      
+      if (partA > partB) return 1;
+      if (partA < partB) return -1;
+    }
+    
+    return 0;
+  }
+
+  async applyUpdate(updateInfo = null) {
+    const update = updateInfo || this.pendingUpdate;
+    if (!update) {
+      throw new Error('No update available to apply');
+    }
+
+    this.logger.info('Aplicando actualización', { 
+      version: update.version,
+      type: update.type,
+      size: update.size 
+    });
+
+    try {
+      // Crear backup del estado actual
+      const backup = await this.createBackup();
+      
+      // Descargar y aplicar update
+      await this.downloadAndApplyUpdate(update);
+      
+      // Actualizar versión
+      this.updateVersion(update.version);
+      
+      // Limpiar estado
+      this.updateAvailable = false;
+      this.pendingUpdate = null;
+      this.retryCount = 0;
+      
+      this.notifyUpdateSuccess(update);
+      
+      return true;
+    } catch (error) {
+      this.logger.error('Error aplicando actualización', { error });
+      this.notifyUpdateError(error);
+      throw error;
+    }
+  }
+
+  async downloadAndApplyUpdate(update) {
+    // Simular descarga y aplicación
+    const steps = [
+      { name: 'Validando actualización', duration: 500 },
+      { name: 'Descargando archivos', duration: 2000 },
+      { name: 'Verificando integridad', duration: 1000 },
+      { name: 'Aplicando cambios', duration: 1500 },
+      { name: 'Validando instalación', duration: 800 }
     ];
 
-    // Seleccionar aleatoriamente si hay actualización
-    if (Math.random() > 0.7) {
-      const randomUpdate = updateTypes[Math.floor(Math.random() * updateTypes.length)];
-      this.processUpdateInfo({
-        available: true,
-        updates: [randomUpdate]
-      });
-    } else {
-      this.processUpdateInfo({ available: false });
-    }
-  }
-
-  processUpdateInfo(updateInfo) {
-    if (!updateInfo.available) {
-      this.logger.debug('No hay actualizaciones disponibles');
-      return;
-    }
-
-    for (const update of updateInfo.updates) {
-      const updateId = `${update.type}_${update.version}`;
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      this.notifyUpdateProgress(step.name, (i + 1) / steps.length * 100);
       
-      if (!this.pendingUpdates.has(updateId)) {
-        this.pendingUpdates.set(updateId, {
-          ...update,
-          id: updateId,
-          discoveredAt: Date.now(),
-          status: 'available'
-        });
-        
-        this.logger.info('Nueva actualización disponible', {
-          type: update.type,
-          version: update.version,
-          size: update.size,
-          critical: update.critical
-        });
-        
-        this.notifyUpdateAvailable(updateId, update);
-        
-        // Auto-actualizar si está habilitado y no es crítica
-        if (this.config.autoUpdate && !update.critical) {
-          this.scheduleUpdate(updateId);
-        }
+      await new Promise(resolve => setTimeout(resolve, step.duration));
+      
+      // Simular posible error
+      if (Math.random() < 0.1) { // 10% chance de error
+        throw new Error(`Update failed at step: ${step.name}`);
       }
     }
   }
 
-  notifyUpdateAvailable(updateId, update) {
-    // Notificar a través del sistema de alertas
+  async createBackup() {
+    // Crear backup del estado actual
+    const backup = {
+      version: this.currentVersion,
+      timestamp: Date.now(),
+      config: this.getCurrentConfig(),
+      state: this.getCurrentGameState()
+    };
+
+    // En aplicación real, guardar en localStorage o enviar al servidor
+    this.logger.debug('Backup creado', { size: JSON.stringify(backup).length });
+    
+    return backup;
+  }
+
+  getCurrentConfig() {
+    return window.gameConfig || {};
+  }
+
+  getCurrentGameState() {
+    return {
+      playerProgress: window.gameState?.progress || {},
+      settings: window.gameState?.settings || {},
+      achievements: window.gameState?.achievements || []
+    };
+  }
+
+  updateVersion(newVersion) {
+    this.currentVersion = newVersion;
+    if (window.BUILD_INFO) {
+      window.BUILD_INFO.version = newVersion;
+    }
+    
+    // Actualizar en localStorage
+    localStorage.setItem('gameVersion', newVersion);
+  }
+
+  handleUpdateCheckError(error) {
+    this.retryCount++;
+    
+    if (this.retryCount >= this.config.maxRetries) {
+      this.logger.error('Max retries reached for update check');
+      this.notifyUpdateCheckFailed();
+      this.retryCount = 0;
+    } else {
+      // Retry con backoff exponencial
+      const delay = Math.pow(2, this.retryCount) * 1000;
+      setTimeout(() => this.checkForUpdates(), delay);
+    }
+  }
+
+  setupEventListeners() {
+    // Listener para updates manuales desde UI
+    window.addEventListener('gameRequestUpdate', (event) => {
+      this.checkForUpdates();
+    });
+
+    // Listener para aplicar updates
+    window.addEventListener('gameApplyUpdate', async (event) => {
+      try {
+        await this.applyUpdate(event.detail.updateInfo);
+      } catch (error) {
+        this.logger.error('Error applying update from event', { error });
+      }
+    });
+  }
+
+  notifyUpdateAvailable(updateInfo) {
+    this.dispatchEvent('updateAvailable', updateInfo);
+    
     if (window.alertSystem) {
-      const severity = update.critical ? 'critical' : 'info';
-      window.alertSystem.alert(
-        `Actualización disponible: ${update.version}`,
+      window.alertSystem.info(
+        `Actualización disponible: v${updateInfo.version}`,
         {
-          updateId,
-          type: update.type,
-          size: update.size,
-          description: update.description
-        },
-        {
-          severity,
-          category: 'update',
-          source: 'UpdateManager'
+          type: updateInfo.type,
+          size: this.formatSize(updateInfo.size),
+          description: updateInfo.description
         }
       );
     }
-    
-    // Mostrar notificación visual
-    this.showUpdateNotification(update);
-    
-    // Emitir evento personalizado
-    window.dispatchEvent(new CustomEvent('updateAvailable', {
-      detail: { updateId, update }
-    }));
   }
 
-  showUpdateNotification(update) {
-    const notification = document.createElement('div');
-    notification.className = 'update-notification';
-    notification.innerHTML = `
-      <div class="update-notification-content">
-        <div class="update-header">
-          <h3>🔄 Actualización Disponible</h3>
-          <span class="update-version">${update.version}</span>
-        </div>
-        <p class="update-description">${update.description}</p>
-        <div class="update-details">
-          <span class="update-size">Tamaño: ${update.size}MB</span>
-          <span class="update-type">${update.type.toUpperCase()}</span>
-        </div>
-        <div class="update-actions">
-          <button class="update-btn update-now" onclick="window.updateManager.installUpdate('${update.id}')">
-            Actualizar Ahora
-          </button>
-          <button class="update-btn update-later" onclick="window.updateManager.postponeUpdate('${update.id}')">
-            Más Tarde
-          </button>
-          ${!update.critical ? '<button class="update-btn update-skip" onclick="window.updateManager.skipUpdate(\'' + update.id + '\')">Omitir</button>' : ''}
-        </div>
-      </div>
-    `;
-    
-    // Estilos
-    notification.style.cssText = `
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-      z-index: 10001;
-      min-width: 400px;
-      max-width: 500px;
-      font-family: Arial, sans-serif;
-    `;
-    
-    document.body.appendChild(notification);
-    
-    // Exponer método para cerrar
-    window.updateManager = this;
+  notifyUpdateProgress(step, progress) {
+    this.dispatchEvent('updateProgress', { step, progress });
   }
 
-  async installUpdate(updateId) {
-    const update = this.pendingUpdates.get(updateId);
-    if (!update) {
-      this.logger.error('Update not found', { updateId });
-      return;
-    }
-
-    try {
-      this.logger.info('Iniciando instalación de actualización', {
-        updateId,
-        version: update.version
-      });
-      
-      update.status = 'downloading';
-      await this.downloadUpdate(update);
-      
-      update.status = 'installing';
-      await this.applyUpdate(update);
-      
-      update.status = 'completed';
-      this.recordUpdateHistory(update);
-      
-      this.logger.info('Actualización instalada exitosamente', {
-        updateId,
-        version: update.version
-      });
-      
-      // Cerrar notificación
-      this.closeUpdateNotification();
-      
-      // Mostrar mensaje de éxito
-      this.showUpdateSuccess(update);
-      
-    } catch (error) {
-      update.status = 'failed';
-      this.logger.error('Error installing update', { updateId }, error);
-      this.showUpdateError(update, error);
+  notifyUpdateSuccess(updateInfo) {
+    this.dispatchEvent('updateSuccess', updateInfo);
+    
+    if (window.alertSystem) {
+      window.alertSystem.success(
+        `Actualización aplicada: v${updateInfo.version}`,
+        'El juego se reiniciará automáticamente'
+      );
     }
   }
 
-  async downloadUpdate(update) {
-    this.logger.info('Descargando actualización...', {
-      version: update.version,
-      size: update.size
+  notifyUpdateError(error) {
+    this.dispatchEvent('updateError', { error: error.message });
+    
+    if (window.alertSystem) {
+      window.alertSystem.error(
+        'Error aplicando actualización',
+        error.message
+      );
+    }
+  }
+
+  notifyUpdateCheckFailed() {
+    this.dispatchEvent('updateCheckFailed', {});
+  }
+
+  dispatchEvent(type, data) {
+    const event = new CustomEvent(`gameUpdate${type.charAt(0).toUpperCase() + type.slice(1)}`, {
+      detail: data
     });
-    
-    // Simular descarga con progress
-    const totalSize = update.size * 1024 * 1024; // Convert to bytes
-    let downloaded = 0;
-    
-    return new Promise((resolve, reject) => {
-      const interval = setInterval(() => {
-        const increment = Math.random() * 0.1 * totalSize;
-        downloaded += increment;
-        
-        const progress = Math.min(downloaded / totalSize, 1);
-        this.updateDownloadProgress(update.id, progress);
-        
-        if (progress >= 1) {
-          clearInterval(interval);
-          resolve();
-        }
-      }, 100);
-      
-      // Timeout
-      setTimeout(() => {
-        clearInterval(interval);
-        reject(new Error('Download timeout'));
-      }, this.config.downloadTimeout);
-    });
+    window.dispatchEvent(event);
   }
 
-  updateDownloadProgress(updateId, progress) {
-    const percentage = Math.round(progress * 100);
-    this.logger.debug(`Download progress: ${percentage}%`, { updateId });
+  formatSize(bytes) {
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let size = bytes;
+    let unitIndex = 0;
     
-    // Actualizar UI si existe
-    const notification = document.querySelector('.update-notification');
-    if (notification) {
-      let progressBar = notification.querySelector('.progress-bar');
-      if (!progressBar) {
-        progressBar = document.createElement('div');
-        progressBar.className = 'progress-bar';
-        progressBar.innerHTML = `
-          <div class="progress-fill" style="width: 0%; background: #4CAF50; height: 20px; transition: width 0.3s;"></div>
-          <span class="progress-text">Descargando... 0%</span>
-        `;
-        notification.appendChild(progressBar);
-      }
-      
-      const fill = progressBar.querySelector('.progress-fill');
-      const text = progressBar.querySelector('.progress-text');
-      
-      fill.style.width = percentage + '%';
-      text.textContent = `Descargando... ${percentage}%`;
-    }
-  }
-
-  async applyUpdate(update) {
-    this.logger.info('Aplicando actualización...', { version: update.version });
-    
-    // Simular aplicación de actualización
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // En una aplicación real, aquí se aplicarían los cambios
-    // Por ahora, simulamos la aplicación
-    
-    // Actualizar versión actual
-    this.currentVersion = update.version;
-    
-    // Actualizar BUILD_INFO si existe
-    if (window.BUILD_INFO) {
-      window.BUILD_INFO.version = update.version;
-      window.BUILD_INFO.timestamp = Date.now();
-    }
-  }
-
-  recordUpdateHistory(update) {
-    const historyEntry = {
-      id: update.id,
-      version: update.version,
-      type: update.type,
-      installedAt: Date.now(),
-      size: update.size,
-      description: update.description,
-      changes: update.changes || [],
-      success: update.status === 'completed'
-    };
-    
-    this.updateHistory.push(historyEntry);
-    this.saveUpdateHistory();
-    
-    // Limpiar update pendiente
-    this.pendingUpdates.delete(update.id);
-  }
-
-  postponeUpdate(updateId) {
-    const update = this.pendingUpdates.get(updateId);
-    if (update) {
-      update.postponedUntil = Date.now() + (24 * 60 * 60 * 1000); // 24 horas
-      this.logger.info('Actualización pospuesta', { updateId, version: update.version });
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex++;
     }
     
-    this.closeUpdateNotification();
+    return `${size.toFixed(1)} ${units[unitIndex]}`;
   }
 
-  skipUpdate(updateId) {
-    const update = this.pendingUpdates.get(updateId);
-    if (update && !update.critical) {
-      this.pendingUpdates.delete(updateId);
-      this.logger.info('Actualización omitida', { updateId, version: update.version });
-    }
-    
-    this.closeUpdateNotification();
-  }
-
-  scheduleUpdate(updateId) {
-    const update = this.pendingUpdates.get(updateId);
-    if (!update) return;
-    
-    // Programar para instalar en el próximo reinicio del juego
-    update.scheduled = true;
-    this.logger.info('Actualización programada', { updateId, version: update.version });
-  }
-
-  closeUpdateNotification() {
-    const notification = document.querySelector('.update-notification');
-    if (notification) {
-      notification.remove();
-    }
-  }
-
-  showUpdateSuccess(update) {
-    const notification = document.createElement('div');
-    notification.className = 'update-success';
-    notification.innerHTML = `
-      <div class="success-content">
-        <h3>✅ Actualización Completada</h3>
-        <p>El juego se ha actualizado a la versión ${update.version}</p>
-        <button onclick="this.parentElement.parentElement.remove()">OK</button>
-      </div>
-    `;
-    
-    notification.style.cssText = `
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: #4CAF50;
-      color: white;
-      padding: 20px;
-      border-radius: 10px;
-      z-index: 10001;
-      text-align: center;
-    `;
-    
-    document.body.appendChild(notification);
-    
-    // Auto-remove después de 5 segundos
-    setTimeout(() => {
-      if (notification.parentElement) {
-        notification.remove();
-      }
-    }, 5000);
-  }
-
-  showUpdateError(update, error) {
-    const notification = document.createElement('div');
-    notification.className = 'update-error';
-    notification.innerHTML = `
-      <div class="error-content">
-        <h3>❌ Error en Actualización</h3>
-        <p>No se pudo instalar la actualización ${update.version}</p>
-        <p class="error-message">${error.message}</p>
-        <button onclick="this.parentElement.parentElement.remove()">OK</button>
-      </div>
-    `;
-    
-    notification.style.cssText = `
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: #f44336;
-      color: white;
-      padding: 20px;
-      border-radius: 10px;
-      z-index: 10001;
-      text-align: center;
-    `;
-    
-    document.body.appendChild(notification);
-  }
-
-  // Métodos públicos
-  getPendingUpdates() {
-    return Array.from(this.pendingUpdates.values());
-  }
-
-  getUpdateHistory() {
-    return [...this.updateHistory];
-  }
-
-  getCurrentVersion() {
-    return this.currentVersion;
-  }
-
-  getUpdateStats() {
-    const history = this.getUpdateHistory();
-    const pending = this.getPendingUpdates();
-    
+  getStatus() {
     return {
       currentVersion: this.currentVersion,
-      totalUpdates: history.length,
-      pendingUpdates: pending.length,
-      lastUpdate: history[history.length - 1]?.installedAt || null,
-      criticalUpdates: pending.filter(u => u.critical).length,
-      autoUpdateEnabled: this.config.autoUpdate
+      isChecking: this.isChecking,
+      lastCheck: this.lastCheck,
+      updateAvailable: this.updateAvailable,
+      pendingUpdate: this.pendingUpdate,
+      retryCount: this.retryCount
     };
   }
 
-  dispose() {
-    if (this.updateCheckTimer) {
-      clearInterval(this.updateCheckTimer);
-    }
-    
-    this.pendingUpdates.clear();
-    this.downloadCache.clear();
+  destroy() {
+    this.stopAutoCheck();
+    this.logger.info('UpdateManager destroyed');
   }
 }
 
-// ========================================
-// PATCH SYSTEM
-// ========================================
+// ============================================================================
+// 🔧 PATCH SYSTEM - Sistema de Patches en Tiempo Real
+// ============================================================================
 
 export class PatchSystem {
-  constructor(config = {}) {
+  constructor(options = {}) {
     this.config = {
-      enabled: config.enabled !== false,
-      patchEndpoint: config.patchEndpoint || '/api/patches',
-      hotPatchEnabled: config.hotPatchEnabled !== false,
-      maxPatchSize: config.maxPatchSize || 10 * 1024 * 1024, // 10MB
-      ...config
+      patchEndpoint: options.patchEndpoint || '/api/patches',
+      enableHotPatches: options.enableHotPatches !== false,
+      maxPatchSize: options.maxPatchSize || 1024 * 1024, // 1MB
+      autoApplyPatches: options.autoApplyPatches !== false,
+      ...options
     };
 
+    this.logger = new Logger('PatchSystem');
+    this.security = new SecurityManager();
     this.appliedPatches = new Map();
-    this.patchQueue = [];
     this.patchHistory = [];
-    this.logger = new Logger({ context: 'PatchSystem' });
-    
-    this.initializePatchSystem();
+    this.rollbackData = new Map();
+    this.patchQueue = [];
+    this.isProcessing = false;
+
+    this.init();
   }
 
-  initializePatchSystem() {
-    this.loadPatchHistory();
-    this.setupHotPatchListener();
-    
-    this.logger.info('Patch System inicializado', {
-      hotPatchEnabled: this.config.hotPatchEnabled
+  init() {
+    this.logger.info('Inicializando PatchSystem');
+    this.loadAppliedPatches();
+    this.setupEventListeners();
+  }
+
+  loadAppliedPatches() {
+    try {
+      const saved = localStorage.getItem('appliedPatches');
+      if (saved) {
+        const patches = JSON.parse(saved);
+        for (const patch of patches) {
+          this.appliedPatches.set(patch.id, patch);
+        }
+      }
+    } catch (error) {
+      this.logger.error('Error loading applied patches', { error });
+    }
+  }
+
+  saveAppliedPatches() {
+    try {
+      const patches = Array.from(this.appliedPatches.values());
+      localStorage.setItem('appliedPatches', JSON.stringify(patches));
+    } catch (error) {
+      this.logger.error('Error saving applied patches', { error });
+    }
+  }
+
+  setupEventListeners() {
+    // Listener para patches remotos
+    window.addEventListener('remotePatchReceived', (event) => {
+      this.queuePatch(event.detail.patch);
     });
   }
 
-  loadPatchHistory() {
+  async fetchAvailablePatches() {
     try {
-      const stored = localStorage.getItem('crashworm_patch_history');
-      if (stored) {
-        this.patchHistory = JSON.parse(stored);
-        
-        // Reconstruir mapa de patches aplicados
-        this.patchHistory.forEach(patch => {
-          if (patch.applied) {
-            this.appliedPatches.set(patch.id, patch);
-          }
+      const response = await fetch(this.config.patchEndpoint, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Applied-Patches': JSON.stringify(Array.from(this.appliedPatches.keys())),
+          ...this.security.getAuthHeaders()
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Patch fetch failed: ${response.status}`);
+      }
+
+      const patches = await response.json();
+      return patches.filter(patch => !this.appliedPatches.has(patch.id));
+    } catch (error) {
+      this.logger.error('Error fetching patches', { error });
+      return [];
+    }
+  }
+
+  queuePatch(patch) {
+    this.patchQueue.push(patch);
+    
+    if (this.config.autoApplyPatches && !this.isProcessing) {
+      this.processQueue();
+    }
+  }
+
+  async processQueue() {
+    if (this.isProcessing || this.patchQueue.length === 0) {
+      return;
+    }
+
+    this.isProcessing = true;
+
+    while (this.patchQueue.length > 0) {
+      const patch = this.patchQueue.shift();
+      
+      try {
+        await this.applyPatch(patch);
+      } catch (error) {
+        this.logger.error('Error processing patch from queue', { 
+          patchId: patch.id, 
+          error 
         });
       }
-    } catch (error) {
-      this.logger.error('Error loading patch history', {}, error);
     }
+
+    this.isProcessing = false;
   }
 
-  savePatchHistory() {
-    try {
-      localStorage.setItem('crashworm_patch_history', JSON.stringify(this.patchHistory));
-    } catch (error) {
-      this.logger.error('Error saving patch history', {}, error);
-    }
-  }
-
-  setupHotPatchListener() {
-    if (!this.config.hotPatchEnabled) return;
-    
-    // Escuchar mensajes de patches en tiempo real
-    if (typeof WebSocket !== 'undefined') {
-      this.setupWebSocketListener();
-    }
-    
-    // Escuchar eventos de server-sent events
-    if (typeof EventSource !== 'undefined') {
-      this.setupEventSourceListener();
-    }
-  }
-
-  setupWebSocketListener() {
-    // En una aplicación real, esto se conectaría a un WebSocket
-    // Para esta demo, simular recepción de patches
-    this.logger.debug('WebSocket patch listener configurado');
-  }
-
-  setupEventSourceListener() {
-    // En una aplicación real, esto usaría Server-Sent Events
-    this.logger.debug('EventSource patch listener configurado');
-  }
-
-  async applyPatch(patchData) {
-    const patch = {
-      id: patchData.id || this.generatePatchId(),
-      version: patchData.version,
-      type: patchData.type, // 'hotfix', 'feature', 'security'
-      target: patchData.target, // 'client', 'server', 'both'
-      priority: patchData.priority || 'normal', // 'low', 'normal', 'high', 'critical'
-      size: patchData.size || 0,
-      checksum: patchData.checksum,
-      code: patchData.code,
-      description: patchData.description,
-      receivedAt: Date.now(),
-      applied: false,
-      rollbackData: null
-    };
+  async applyPatch(patch) {
+    this.logger.info('Aplicando patch', { id: patch.id, type: patch.type });
 
     try {
-      this.logger.info('Aplicando patch', {
-        id: patch.id,
-        type: patch.type,
-        priority: patch.priority
-      });
-      
       // Validar patch
       this.validatePatch(patch);
       
-      // Crear backup para rollback
-      patch.rollbackData = await this.createRollbackData(patch);
+      // Crear datos de rollback
+      const rollbackData = await this.createRollbackData(patch);
+      this.rollbackData.set(patch.id, rollbackData);
       
       // Aplicar patch
       await this.executePatch(patch);
       
       // Marcar como aplicado
-      patch.applied = true;
-      patch.appliedAt = Date.now();
+      const appliedPatch = {
+        ...patch,
+        appliedAt: Date.now(),
+        rollbackAvailable: true
+      };
       
-      this.appliedPatches.set(patch.id, patch);
-      this.patchHistory.push(patch);
-      this.savePatchHistory();
+      this.appliedPatches.set(patch.id, appliedPatch);
+      this.patchHistory.push(appliedPatch);
       
-      this.logger.info('Patch aplicado exitosamente', {
-        id: patch.id,
-        version: patch.version
-      });
+      // Guardar estado
+      this.saveAppliedPatches();
       
-      // Notificar éxito
       this.notifyPatchSuccess(patch);
       
-      return patch;
-      
+      return true;
     } catch (error) {
-      patch.applied = false;
-      patch.error = error.message;
-      patch.failedAt = Date.now();
-      
-      this.patchHistory.push(patch);
-      this.savePatchHistory();
-      
-      this.logger.error('Error applying patch', {
-        id: patch.id,
-        error: error.message
-      }, error);
-      
+      this.logger.error('Error aplicando patch', { id: patch.id, error });
       this.notifyPatchError(patch, error);
+      throw error;
+    }
+  }
+
+  async rollbackPatch(patchId) {
+    const patch = this.appliedPatches.get(patchId);
+    if (!patch) {
+      throw new Error(`Patch ${patchId} no encontrado`);
+    }
+
+    const rollbackData = this.rollbackData.get(patchId);
+    if (!rollbackData) {
+      throw new Error(`No hay datos de rollback para patch ${patchId}`);
+    }
+
+    try {
+      this.logger.info('Haciendo rollback de patch', { id: patchId });
+      
+      await this.executeRollback(rollbackData);
+      
+      // Remover de aplicados
+      this.appliedPatches.delete(patchId);
+      this.rollbackData.delete(patchId);
+      
+      // Actualizar historial
+      this.patchHistory.push({
+        id: `rollback_${patchId}`,
+        type: 'rollback',
+        targetPatch: patchId,
+        appliedAt: Date.now()
+      });
+      
+      this.saveAppliedPatches();
+      
+      this.logger.info('Rollback completado', { id: patchId });
+      return true;
+    } catch (error) {
+      this.logger.error('Error en rollback', { id: patchId, error });
       throw error;
     }
   }
@@ -926,7 +766,7 @@ export class PatchSystem {
   }
 
   async updateAssets(assets) {
-    // Actualizar assets
+    // Actualizar assets del juego
     for (const asset of assets) {
       await this.updateAsset(asset);
     }
@@ -936,44 +776,14 @@ export class PatchSystem {
     // Actualizar un asset específico
     this.logger.debug('Actualizando asset', { path: asset.path });
     
-    // En una aplicación real, esto descargaría y reemplazaría assets
+    // Simular actualización de asset
     await new Promise(resolve => setTimeout(resolve, 500));
   }
 
-  async rollbackPatch(patchId) {
-    const patch = this.appliedPatches.get(patchId);
-    if (!patch) {
-      throw new Error(`Patch ${patchId} not found or not applied`);
-    }
+  async executeRollback(rollbackData) {
+    this.logger.debug('Ejecutando rollback', { type: rollbackData.type });
     
-    if (!patch.rollbackData) {
-      throw new Error(`No rollback data available for patch ${patchId}`);
-    }
-    
-    try {
-      this.logger.info('Realizando rollback de patch', { id: patchId });
-      
-      await this.executeRollback(patch);
-      
-      // Marcar como revertido
-      patch.applied = false;
-      patch.rolledBackAt = Date.now();
-      
-      this.appliedPatches.delete(patchId);
-      this.savePatchHistory();
-      
-      this.logger.info('Rollback completado', { id: patchId });
-      
-    } catch (error) {
-      this.logger.error('Error during rollback', { id: patchId }, error);
-      throw error;
-    }
-  }
-
-  async executeRollback(patch) {
-    const rollbackData = patch.rollbackData;
-    
-    switch (patch.type) {
+    switch (rollbackData.type) {
       case 'config':
         this.restoreConfig(rollbackData.originalValues);
         break;
@@ -1060,278 +870,274 @@ export class PatchSystem {
     return {
       totalPatches: history.length,
       appliedPatches: applied.length,
-      failedPatches: history.filter(p => !p.applied).length,
-      patchesByType: this.groupPatchesByType(history),
-      lastPatch: history[history.length - 1] || null
+      rollbacksAvailable: this.rollbackData.size,
+      queuedPatches: this.patchQueue.length,
+      lastPatch: applied.length > 0 ? applied[applied.length - 1] : null
     };
   }
 
-  groupPatchesByType(patches) {
-    const grouped = {};
-    patches.forEach(patch => {
-      grouped[patch.type] = (grouped[patch.type] || 0) + 1;
-    });
-    return grouped;
-  }
-
-  dispose() {
-    this.appliedPatches.clear();
+  destroy() {
     this.patchQueue = [];
+    this.isProcessing = false;
+    this.logger.info('PatchSystem destroyed');
   }
 }
 
-// ========================================
-// VERSION CONTROL SYSTEM
-// ========================================
+// ============================================================================
+// 🔄 VERSION CONTROL - Control de Versiones
+// ============================================================================
 
 export class VersionControl {
-  constructor(config = {}) {
+  constructor(options = {}) {
     this.config = {
-      trackChanges: config.trackChanges !== false,
-      maxVersionHistory: config.maxVersionHistory || 50,
-      compareEndpoint: config.compareEndpoint || '/api/versions',
-      ...config
+      trackingEnabled: options.trackingEnabled !== false,
+      maxVersionHistory: options.maxVersionHistory || 100,
+      compressionEnabled: options.compressionEnabled !== false,
+      ...options
     };
 
+    this.logger = new Logger('VersionControl');
     this.versionHistory = [];
-    this.currentVersion = this.getCurrentVersion();
-    this.changeLog = [];
-    this.logger = new Logger({ context: 'VersionControl' });
-    
-    this.initializeVersionControl();
+    this.currentBranch = 'main';
+    this.branches = new Map();
+    this.tags = new Map();
+
+    this.init();
   }
 
-  initializeVersionControl() {
+  init() {
+    this.logger.info('Inicializando VersionControl');
     this.loadVersionHistory();
-    this.trackCurrentVersion();
-    
-    this.logger.info('Version Control inicializado', {
-      currentVersion: this.currentVersion,
-      historyEntries: this.versionHistory.length
-    });
-  }
-
-  getCurrentVersion() {
-    return window.BUILD_INFO?.version || '1.0.0';
+    this.createInitialVersion();
   }
 
   loadVersionHistory() {
     try {
-      const stored = localStorage.getItem('crashworm_version_history');
-      if (stored) {
-        this.versionHistory = JSON.parse(stored);
+      const saved = localStorage.getItem('versionHistory');
+      if (saved) {
+        this.versionHistory = JSON.parse(saved);
       }
     } catch (error) {
-      this.logger.error('Error loading version history', {}, error);
+      this.logger.error('Error loading version history', { error });
     }
   }
 
   saveVersionHistory() {
     try {
-      localStorage.setItem('crashworm_version_history', JSON.stringify(this.versionHistory));
+      // Mantener solo las últimas N versiones
+      if (this.versionHistory.length > this.config.maxVersionHistory) {
+        this.versionHistory = this.versionHistory.slice(-this.config.maxVersionHistory);
+      }
+
+      localStorage.setItem('versionHistory', JSON.stringify(this.versionHistory));
     } catch (error) {
-      this.logger.error('Error saving version history', {}, error);
+      this.logger.error('Error saving version history', { error });
     }
   }
 
-  trackCurrentVersion() {
-    const versionInfo = {
-      version: this.currentVersion,
-      timestamp: Date.now(),
-      buildInfo: window.BUILD_INFO || {},
-      environment: process.env.NODE_ENV || 'production',
-      features: this.getEnabledFeatures(),
-      patches: this.getAppliedPatches(),
-      configuration: this.getRelevantConfig()
-    };
-    
-    this.versionHistory.push(versionInfo);
-    
-    // Limitar historial
-    if (this.versionHistory.length > this.config.maxVersionHistory) {
-      this.versionHistory = this.versionHistory.slice(-this.config.maxVersionHistory);
+  createInitialVersion() {
+    if (this.versionHistory.length === 0) {
+      this.createVersion('1.0.0', 'Initial version', 'system');
     }
-    
+  }
+
+  createVersion(version, description, author = 'unknown') {
+    const versionInfo = {
+      id: this.generateVersionId(),
+      version,
+      description,
+      author,
+      timestamp: Date.now(),
+      branch: this.currentBranch,
+      changes: this.captureCurrentState(),
+      size: 0 // Calculado después
+    };
+
+    // Calcular tamaño
+    versionInfo.size = JSON.stringify(versionInfo.changes).length;
+
+    this.versionHistory.push(versionInfo);
     this.saveVersionHistory();
+
+    this.logger.info('Nueva versión creada', { 
+      version, 
+      size: versionInfo.size,
+      branch: this.currentBranch 
+    });
+
+    return versionInfo;
+  }
+
+  captureCurrentState() {
+    return {
+      gameConfig: window.gameConfig || {},
+      buildInfo: window.BUILD_INFO || {},
+      playerState: this.getPlayerState(),
+      systemState: this.getSystemState(),
+      timestamp: Date.now()
+    };
+  }
+
+  getPlayerState() {
+    return {
+      progress: window.gameState?.progress || {},
+      settings: window.gameState?.settings || {},
+      achievements: window.gameState?.achievements || []
+    };
+  }
+
+  getSystemState() {
+    return {
+      performance: window.performanceManager?.getStats() || {},
+      errors: window.logger?.getRecentErrors() || [],
+      features: this.getEnabledFeatures()
+    };
   }
 
   getEnabledFeatures() {
-    // Obtener features habilitadas
-    return {
-      multiplayer: window.gameConfig?.network?.enabled || false,
-      analytics: window.gameConfig?.analytics?.enabled || false,
-      devTools: window.gameConfig?.development?.devTools || false,
-      antiCheat: window.gameConfig?.security?.antiCheat || false
-    };
+    return Object.keys(window.gameConfig?.features || {})
+      .filter(key => window.gameConfig.features[key]);
   }
 
-  getAppliedPatches() {
-    // Obtener patches aplicados
-    if (window.patchSystem) {
-      return window.patchSystem.getAppliedPatches().map(p => ({
-        id: p.id,
-        version: p.version,
-        type: p.type,
-        appliedAt: p.appliedAt
-      }));
+  generateVersionId() {
+    return `v_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  createBranch(name, fromVersion = null) {
+    if (this.branches.has(name)) {
+      throw new Error(`Branch ${name} already exists`);
     }
-    return [];
-  }
 
-  getRelevantConfig() {
-    // Obtener configuración relevante para el versionado
-    return {
-      graphics: window.gameConfig?.graphics?.quality || 'auto',
-      audio: window.gameConfig?.audio?.enabled || true,
-      language: navigator.language || 'en'
-    };
-  }
-
-  compareVersions(version1, version2) {
-    // Comparar dos versiones
-    const v1Parts = version1.split('.').map(Number);
-    const v2Parts = version2.split('.').map(Number);
+    const baseVersion = fromVersion || this.getCurrentVersion();
     
-    for (let i = 0; i < Math.max(v1Parts.length, v2Parts.length); i++) {
-      const v1Part = v1Parts[i] || 0;
-      const v2Part = v2Parts[i] || 0;
-      
-      if (v1Part < v2Part) return -1;
-      if (v1Part > v2Part) return 1;
+    this.branches.set(name, {
+      name,
+      createdAt: Date.now(),
+      baseVersion,
+      commits: []
+    });
+
+    this.logger.info('Nueva rama creada', { name, baseVersion });
+  }
+
+  switchBranch(name) {
+    if (!this.branches.has(name) && name !== 'main') {
+      throw new Error(`Branch ${name} does not exist`);
     }
-    
-    return 0;
+
+    this.currentBranch = name;
+    this.logger.info('Cambiado a rama', { branch: name });
   }
 
-  getVersionDiff(fromVersion, toVersion) {
-    // Obtener diferencias entre versiones
-    const fromInfo = this.versionHistory.find(v => v.version === fromVersion);
-    const toInfo = this.versionHistory.find(v => v.version === toVersion);
-    
-    if (!fromInfo || !toInfo) {
-      return null;
+  createTag(name, version, description = '') {
+    if (this.tags.has(name)) {
+      throw new Error(`Tag ${name} already exists`);
     }
-    
-    return {
-      version: {
-        from: fromVersion,
-        to: toVersion,
-        type: this.getVersionChangeType(fromVersion, toVersion)
-      },
-      features: this.getFeatureDiff(fromInfo.features, toInfo.features),
-      patches: this.getPatchDiff(fromInfo.patches, toInfo.patches),
-      configuration: this.getConfigDiff(fromInfo.configuration, toInfo.configuration)
-    };
+
+    this.tags.set(name, {
+      name,
+      version,
+      description,
+      createdAt: Date.now(),
+      branch: this.currentBranch
+    });
+
+    this.logger.info('Nuevo tag creado', { name, version });
   }
 
-  getVersionChangeType(from, to) {
-    const fromParts = from.split('.').map(Number);
-    const toParts = to.split('.').map(Number);
-    
-    if (fromParts[0] !== toParts[0]) return 'major';
-    if (fromParts[1] !== toParts[1]) return 'minor';
-    if (fromParts[2] !== toParts[2]) return 'patch';
-    
-    return 'build';
+  getCurrentVersion() {
+    return this.versionHistory.length > 0 
+      ? this.versionHistory[this.versionHistory.length - 1]
+      : null;
   }
 
-  getFeatureDiff(fromFeatures, toFeatures) {
-    const diff = {
+  getVersionByTag(tagName) {
+    const tag = this.tags.get(tagName);
+    if (!tag) {
+      throw new Error(`Tag ${tagName} not found`);
+    }
+
+    return this.versionHistory.find(v => v.version === tag.version);
+  }
+
+  getVersionHistory(limit = 20) {
+    return this.versionHistory.slice(-limit);
+  }
+
+  compareVersions(versionA, versionB) {
+    const changes = {
       added: [],
-      removed: [],
-      changed: []
+      modified: [],
+      removed: []
     };
+
+    // Comparar configuraciones
+    this.compareObjects(versionA.changes, versionB.changes, changes);
+
+    return changes;
+  }
+
+  compareObjects(objA, objB, changes, path = '') {
+    const keysA = Object.keys(objA || {});
+    const keysB = Object.keys(objB || {});
+    const allKeys = new Set([...keysA, ...keysB]);
+
+    for (const key of allKeys) {
+      const currentPath = path ? `${path}.${key}` : key;
+      const valueA = objA?.[key];
+      const valueB = objB?.[key];
+
+      if (!(key in objA)) {
+        changes.added.push({ path: currentPath, value: valueB });
+      } else if (!(key in objB)) {
+        changes.removed.push({ path: currentPath, value: valueA });
+      } else if (JSON.stringify(valueA) !== JSON.stringify(valueB)) {
+        changes.modified.push({ 
+          path: currentPath, 
+          oldValue: valueA, 
+          newValue: valueB 
+        });
+      }
+    }
+  }
+
+  getStats() {
+    return {
+      totalVersions: this.versionHistory.length,
+      currentVersion: this.getCurrentVersion()?.version,
+      currentBranch: this.currentBranch,
+      branches: this.branches.size,
+      tags: this.tags.size,
+      historySize: JSON.stringify(this.versionHistory).length
+    };
+  }
+
+  cleanup(keepVersions = 50) {
+    const removed = this.versionHistory.length - keepVersions;
     
-    for (const [feature, toValue] of Object.entries(toFeatures)) {
-      const fromValue = fromFeatures[feature];
+    if (removed > 0) {
+      this.versionHistory = this.versionHistory.slice(-keepVersions);
+      this.saveVersionHistory();
       
-      if (fromValue === undefined) {
-        diff.added.push(feature);
-      } else if (fromValue !== toValue) {
-        diff.changed.push({ feature, from: fromValue, to: toValue });
-      }
+      this.logger.info('Limpieza de historial completada', { 
+        removedVersions: removed,
+        keptVersions: keepVersions 
+      });
     }
-    
-    for (const feature of Object.keys(fromFeatures)) {
-      if (!(feature in toFeatures)) {
-        diff.removed.push(feature);
-      }
-    }
-    
-    return diff;
   }
 
-  getPatchDiff(fromPatches, toPatches) {
-    const fromIds = new Set(fromPatches.map(p => p.id));
-    const toIds = new Set(toPatches.map(p => p.id));
-    
-    return {
-      added: toPatches.filter(p => !fromIds.has(p.id)),
-      removed: fromPatches.filter(p => !toIds.has(p.id))
-    };
-  }
-
-  getConfigDiff(fromConfig, toConfig) {
-    const diff = {};
-    
-    for (const [key, toValue] of Object.entries(toConfig)) {
-      const fromValue = fromConfig[key];
-      if (fromValue !== toValue) {
-        diff[key] = { from: fromValue, to: toValue };
-      }
-    }
-    
-    return diff;
-  }
-
-  getVersionHistory() {
-    return [...this.versionHistory];
-  }
-
-  getVersionStats() {
-    const history = this.getVersionHistory();
-    const versions = history.map(v => v.version);
-    const uniqueVersions = [...new Set(versions)];
-    
-    return {
-      currentVersion: this.currentVersion,
-      totalVersions: uniqueVersions.length,
-      totalEntries: history.length,
-      firstVersion: history[0]?.version || null,
-      lastUpdate: history[history.length - 1]?.timestamp || null,
-      versionTypes: this.getVersionTypeStats(uniqueVersions)
-    };
-  }
-
-  getVersionTypeStats(versions) {
-    const stats = {
-      major: 0,
-      minor: 0,
-      patch: 0
-    };
-    
-    for (let i = 1; i < versions.length; i++) {
-      const type = this.getVersionChangeType(versions[i-1], versions[i]);
-      stats[type] = (stats[type] || 0) + 1;
-    }
-    
-    return stats;
-  }
-
-  dispose() {
+  destroy() {
     this.saveVersionHistory();
+    this.logger.info('VersionControl destroyed');
   }
 }
 
-// ========================================
-// EXPORTACIONES
-// ========================================
+// ============================================================================
+// 📤 EXPORTACIONES
+// ============================================================================
 
-export { UpdateManager, PatchSystem, VersionControl };
-
-// Inicializar sistemas globalmente en desarrollo
-if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-  window.updateManager = new UpdateManager();
-  window.patchSystem = new PatchSystem();
-  window.versionControl = new VersionControl();
-}
+export default {
+  UpdateManager,
+  PatchSystem,
+  VersionControl
+};

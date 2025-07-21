@@ -1,24 +1,489 @@
-# Logs
-logs
-*.log
+# ============================================================================
+# 📁 CRASH WORM 3D - GITIGNORE COMPLETO
+# ============================================================================
+# Ubicación: .gitignore
+# Archivos y carpetas excluidos del control de versiones
+
+# ========================================
+# 📦 NODE MODULES Y DEPENDENCIAS
+# ========================================
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+.npm
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
 
-node_modules
-dist
-dist-ssr
-*.local
+# ========================================
+# 🏗️ BUILD Y DISTRIBUCIÓN
+# ========================================
+dist/
+build/
+out/
+.output/
+.vercel/
+.netlify/
+.vite/
+.next/
+.nuxt/
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# Archivos de build temporales
+*.tgz
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# Cache de bundlers
+.parcel-cache/
+.cache/
+.temp/
+.tmp/
+.swc/
+
+# ========================================
+# 🔐 ARCHIVOS DE CONFIGURACIÓN SENSIBLES
+# ========================================
+
+# Variables de entorno
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.staging.local
+
+# Claves y certificados
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets.json
+credentials.json
+
+# Configuraciones locales
+config.local.js
+config.local.json
+.localrc
+.secrets
+
+# ========================================
+# 🧪 TESTING Y COVERAGE
+# ========================================
+coverage/
+*.lcov
+.nyc_output/
+junit.xml
+test-results/
+playwright-report/
+test-results.xml
+
+# Jest
+__tests__/__snapshots__/
+.jest/
+
+# Cypress
+cypress/videos/
+cypress/screenshots/
+cypress/downloads/
+cypress.env.json
+
+# ========================================
+# 🔧 HERRAMIENTAS DE DESARROLLO
+# ========================================
+
+# ESLint cache
+.eslintcache
+
+# Prettier cache
+.prettiercache
+
+# TypeScript
+*.tsbuildinfo
+
+# Editor configs
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+.vscode/tasks.json
+*.swp
+*.swo
+*~
+
+# IDE files
+.idea/
+*.iml
+.project
+.classpath
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# Vim
+Session.vim
+.netrwhist
+tags
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# ========================================
+# 🖥️ SISTEMA OPERATIVO
+# ========================================
+
+# macOS
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ========================================
+# 📊 LOGS Y MONITORIO
+# ========================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Archivos de logs específicos del juego
+game-logs/
+crash-reports/
+performance-logs/
+error-reports/
+analytics-data/
+
+# PM2 logs
+.pm2/
+
+# ========================================
+# 🎮 ARCHIVOS ESPECÍFICOS DEL JUEGO
+# ========================================
+
+# Archivos temporales de juego
+temp-saves/
+.game-cache/
+.player-data/
+replay-files/
+screenshot-temp/
+
+# Archivos de desarrollo
+*.dev
+dev-*
+debug-*
+test-*
+mock-*
+
+# Assets temporales
+assets-temp/
+textures-temp/
+audio-temp/
+models-temp/
+
+# ========================================
+# 🐳 DOCKER Y CONTENEDORES
+# ========================================
+.docker/
+Dockerfile.dev
+docker-compose.override.yml
+docker-compose.local.yml
+
+# ========================================
+# ☁️ SERVICIOS EN LA NUBE
+# ========================================
+
+# AWS
+.aws/
+.env.aws
+
+# Google Cloud
+.gcloud/
+.env.gcp
+gcp-key.json
+
+# Azure
+.azure/
+.env.azure
+
+# Firebase
+.firebase/
+.firebaserc
+firebase-debug.log
+firestore-debug.log
+
+# Heroku
+.heroku/
+
+# ========================================
+# 📱 PWA Y SERVICE WORKERS
+# ========================================
+sw.js.map
+workbox-*.js
+workbox-*.js.map
+precache-manifest.*.js
+
+# ========================================
+# 🔒 SEGURIDAD
+# ========================================
+
+# Archivos de seguridad
+security-keys/
+auth-tokens/
+session-data/
+*.security
+*.auth
+
+# Certificados SSL
+ssl/
+certs/
+*.csr
+
+# ========================================
+# 📈 ANALYTICS Y MÉTRICAS
+# ========================================
+analytics/
+metrics/
+performance-data/
+user-data/
+*.analytics
+*.metrics
+
+# ========================================
+# 🧹 ARCHIVOS TEMPORALES
+# ========================================
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.orig
+*.rej
+*.swp
+*.swo
+*.pid
+*.seed
+*.pid.lock
+
+# Carpetas temporales
+tmp/
+temp/
+.temp/
+.tmp/
+
+# ========================================
+# 🔄 CI/CD Y DEPLOYMENT
+# ========================================
+
+# GitHub Actions
+.github/workflows/secrets.yml
+
+# GitLab CI
+.gitlab-ci-local/
+
+# Jenkins
+.jenkins/
+
+# CircleCI
+.circleci/config.local.yml
+
+# ========================================
+# 📦 PACKAGES Y RELEASES
+# ========================================
+*.tgz
+*.tar.gz
+packages/*/dist/
+packages/*/build/
+packages/*/node_modules/
+
+# Release files
+releases/
+deploy/
+deployment/
+
+# ========================================
+# 🎯 ESPECÍFICOS DEL PROYECTO
+# ========================================
+
+# Archivos de configuración específicos
+crash-worm-config.local.json
+game-settings.local.json
+server-config.local.json
+
+# Datos de usuario locales
+user-profiles/
+save-games/
+game-progress/
+player-stats/
+
+# Archivos de desarrollo del equipo
+team-notes/
+dev-docs/
+internal-docs/
+meeting-notes/
+
+# ========================================
+# 🔍 DEBUGGING Y PROFILING
+# ========================================
+*.prof
+*.heap
+*.cpuprofile
+profile-*
+heap-*
+cpu-*
+
+# Chrome DevTools
+.chrome-devtools/
+
+# ========================================
+# 📚 DOCUMENTACIÓN GENERADA
+# ========================================
+docs/generated/
+api-docs/
+coverage-docs/
+jsdoc/
+
+# ========================================
+# 🌐 ARCHIVOS DE TRADUCCIÓN TEMPORALES
+# ========================================
+*.pot
+*.po~
+locales/temp/
+i18n-temp/
+
+# ========================================
+# 🎨 ASSETS TEMPORALES Y CACHE
+# ========================================
+.cache-loader/
+.hard-source-cache/
+.module-cache/
+.asset-cache/
+
+# Thumbnails y previews
+thumbnails/
+previews/
+.thumbnails/
+
+# ========================================
+# 📱 MOBILE Y CORDOVA
+# ========================================
+platforms/
+plugins/
+www/
+config.xml.bak
+
+# ========================================
+# 🔧 HERRAMIENTAS ESPECÍFICAS
+# ========================================
+
+# Storybook
+storybook-static/
+
+# Chromatic
+build-storybook.log
+
+# Bundle analyzers
+bundle-report.html
+stats.json
+
+# ========================================
+# 💾 BASES DE DATOS LOCALES
+# ========================================
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+data/
+database/
+db/
+
+# ========================================
+# 🏃‍♂️ RUNTIME Y MEMORIA
+# ========================================
+*.pid
+*.seed
+*.pid.lock
+pids
+logs
+results
+coverage
+.grunt
+bower_components
+
+# ========================================
+# 🔍 ARCHIVOS DE BÚSQUEDA
+# ========================================
+.vscode/
+.idea/
+*.sublime-*
+.atom/
+
+# Archivos de índices de búsqueda
+.searchindex
+search-index/
+
+# ========================================
+# NOTAS IMPORTANTES
+# ========================================
+
+# RECORDATORIOS:
+# 1. Nunca hacer commit de archivos con claves o contraseñas
+# 2. Los archivos .env deben estar siempre en .gitignore
+# 3. Verificar regularmente que no se suban archivos sensibles
+# 4. Usar 'git status' antes de cada commit
+# 5. Configurar git hooks para validación automática
+
+# Para verificar archivos ignorados: git ls-files --others --ignored --exclude-standard
+# Para limpiar archivos ignorados: git clean -fXd
