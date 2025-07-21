@@ -1,41 +1,62 @@
 {
   "name": "crash-worm-3d",
-  "private": true,
   "version": "1.0.0",
+  "description": "Crash Worm 3D Adventure - Juego 3D multiplayer con React y Three.js",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview --host",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "lint:fix": "eslint . --ext js,jsx --fix"
+    "lint:fix": "eslint . --ext js,jsx --fix",
+    "format": "prettier --write \"src/**/*.{js,jsx,css,md}\"",
+    "test": "vitest",
+    "server": "cd server && npm start"
   },
+  "keywords": [
+    "react",
+    "threejs",
+    "3d-game",
+    "multiplayer",
+    "crash-worm",
+    "websocket"
+  ],
+  "author": "Crash Worm 3D Team",
+  "license": "MIT",
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "three": "^0.158.0",
     "@react-three/fiber": "^8.15.12",
     "@react-three/drei": "^9.88.13",
-    "@react-three/rapier": "^1.4.0",
-    "three": "^0.158.0",
+    "@react-three/rapier": "^1.1.0",
+    "framer-motion": "^10.16.16",
+    "styled-components": "^6.1.8",
     "tone": "^14.7.77",
-    "howler": "^2.2.3",
-    "framer-motion": "^10.16.4",
-    "@react-spring/three": "^9.7.3",
-    "styled-components": "^6.1.1",
-    "mathjs": "^11.11.0",
+    "howler": "^2.2.4",
     "lodash": "^4.17.21",
+    "mathjs": "^12.2.1",
     "uuid": "^9.0.1",
     "lz-string": "^1.5.0",
-    "crypto-js": "^4.2.0"
+    "crypto-js": "^4.2.0",
+    "@react-spring/three": "^9.7.3",
+    "axios": "^1.6.2"
   },
   "devDependencies": {
-    "@types/react": "^18.2.37",
-    "@types/react-dom": "^18.2.15",
-    "@vitejs/plugin-react": "^4.1.1",
-    "eslint": "^8.53.0",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@types/three": "^0.158.3",
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.0.8",
+    "eslint": "^8.55.0",
     "eslint-plugin-react": "^7.33.2",
     "eslint-plugin-react-hooks": "^4.6.0",
-    "eslint-plugin-react-refresh": "^0.4.4",
-    "vite": "^5.0.0"
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "prettier": "^3.1.1",
+    "vitest": "^1.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
   }
 }

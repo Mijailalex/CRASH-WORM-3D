@@ -687,6 +687,18 @@ class GuardBehaviorTree extends BehaviorNode {
   }
 }
 
+class HunterBehaviorTree extends BehaviorNode {
+  execute(aiEntity, gameState) {
+    return { status: 'success', type: 'chase' };
+  }
+}
+
+class PatrolBehaviorTree extends BehaviorNode {
+  execute(aiEntity, gameState) {
+    return { status: 'success', type: 'patrol' };
+  }
+}
+
 class BasicBehaviorTree extends BehaviorNode {
   execute(aiEntity, gameState) {
     return { status: 'success', type: 'idle' };
@@ -1029,7 +1041,7 @@ export class ProceduralSystem {
 // SIMPLEX NOISE (Implementación básica)
 // ========================================
 
-class SimplexNoise {
+export class SimplexNoise {
   constructor() {
     this.perm = new Array(512);
     this.permMod12 = new Array(512);
@@ -1101,10 +1113,65 @@ class SimplexNoise {
 
     return 70.0 * (n0 + n1 + n2);
   }
+
+  getFrequency(x, y, z) {
+    const value = this.noise3D(x, y, z);
+    return (value + 1) / 2;
+  }
+
+  getOctaveNoise(x, y, z, octaves = 4, persistence = 0.5, scale = 0.01) {
+    let value = 0;
+    let amplitude = 1;
+    let frequency = scale;
+    let maxValue = 0;
+
+    for (let i = 0; i < octaves; i++) {
+      value += this.noise3D(x * frequency, y * frequency, z * frequency) * amplitude;
+      maxValue += amplitude;
+      amplitude *= persistence;
+      frequency *= 2;
+    }
+
+    return value / maxValue;
+  }
+
+  getRidgedNoise(x, y, z, octaves = 4, persistence = 0.5, scale = 0.01) {
+    let value = 0;
+    let amplitude = 1;
+    let frequency = scale;
+    let maxValue = 0;
+
+    for (let i = 0; i < octaves; i++) {
+      const sample = Math.abs(this.noise3D(x * frequency, y * frequency, z * frequency));
+      const ridged = 1 - sample;
+      value += ridged * amplitude;
+      maxValue += amplitude;
+      amplitude *= persistence;
+      frequency *= 2;
+    }
+
+    return value / maxValue;
+  }
+
+  getBillowNoise(x, y, z, octaves = 4, persistence = 0.5, scale = 0.01) {
+    let value = 0;
+    let amplitude = 1;
+    let frequency = scale;
+    let maxValue = 0;
+
+    for (let i = 0; i < octaves; i++) {
+      const sample = Math.abs(this.noise3D(x * frequency, y * frequency, z * frequency));
+      value += sample * amplitude;
+      maxValue += amplitude;
+      amplitude *= persistence;
+      frequency *= 2;
+    }
+
+    return value / maxValue;
+  }
+
+  noise3D(x, y, z) {
+    // Implementación simplificada de ruido 3D
+    return this.noise2D(x + y * 0.1, z + x * 0.1);
+  }
 }
-
-// ========================================
-// EXPORTACIONES
-// ========================================
-
-export { AISystem, ProceduralSystem, SimplexNoise };
