@@ -1,106 +1,108 @@
 /* ============================================================================ */
-/* 🎮 CRASH WORM 3D - HOOK DE SINCRONIZACIÓN DE RED */
+/* 🌐 CRASH WORM 3D - NETWORK SYNC HOOK */
 /* ============================================================================ */
+/* Ubicación: src/hooks/useNetworkSync.js */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { useGame } from '@/context/GameContext';
+import { gameConfig } from '../data/gameConfig';
 
-// ========================================
-// 🌐 HOOK DE NETWORK SYNC
-// ========================================
-
-export function useNetworkSync() {
-  const { state, actions } = useGame();
+export function useNetworkSync(gameEngine, options = {}) {
   const wsRef = useRef(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [connectionError, setConnectionError] = useState(null);
-  const [latency, setLatency] = useState(0);
-  const [roomCode, setRoomCode] = useState('');
-  const [players, setPlayers] = useState([]);
-
+  const reconnectTimeoutRef = useRef(null);
+  const heartbeatIntervalRef = useRef(null);
   const messageQueueRef = useRef([]);
-  const lastPingRef = useRef(0);
-  const reconnectAttemptsRef = useRef(0);
-  const maxReconnectAttempts = 3;
+  const lastSyncTimeRef = useRef(0);
+
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionState, setConnectionState] = useState('disconnected');
+  const [playersData, setPlayersData] = useState(new Map());
+  const [roomData, setRoomData] = useState(null);
+  const [latency, setLatency] = useState(0);
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+
+  const config = {
+    ...gameConfig.network,
+    ...options
+  };
 
   // ========================================
-  // 🔌 GESTIÓN DE CONEXIÓN
+  // 🔌 CONNECTION MANAGEMENT
   // ========================================
 
-  const connect = useCallback((serverUrl = 'ws://localhost:3001') => {
+  const connect = useCallback((endpoint = config.endpoints.game) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      console.warn('Already connected to server');
-      return;
+      return Promise.resolve();
     }
 
-    try {
-      wsRef.current = new WebSocket(serverUrl);
+    return new Promise((resolve, reject) => {
+      try {
+        setConnectionState('connecting');
+        wsRef.current = new WebSocket(endpoint);
 
-      wsRef.current.onopen = handleConnectionOpen;
-      wsRef.current.onmessage = handleMessage;
-      wsRef.current.onclose = handleConnectionClose;
-      wsRef.current.onerror = handleConnectionError;
+        wsRef.current.onopen = () => {
+          setIsConnected(true);
+          setConnectionState('connected');
+          setReconnectAttempts(0);
 
-    } catch (error) {
-      console.error('Failed to create WebSocket connection:', error);
-      setConnectionError(error.message);
-    }
-  }, []);
+          // Start heartbeat
+          startHeartbeat();
+
+          // Send queued messages
+          flushMessageQueue();
+
+          resolve();
+        };
+
+        wsRef.current.onmessage = handleMessage;
+        wsRef.current.onerror = handleError;
+        wsRef.current.onclose = handleClose;
+
+        // Connection timeout
+        setTimeout(() => {
+          if (wsRef.current?.readyState !== WebSocket.OPEN) {
+            wsRef.current?.close();
+            reject(new Error('Connection timeout'));
+          }
+        }, config.connection.timeout);
+
+      } catch (error) {
+        setConnectionState('error');
+        reject(error);
+      }
+    });
+  }, [config]);
 
   const disconnect = useCallback(() => {
     if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
+      wsRef.current.close(1000, 'User disconnected');
     }
+    stopHeartbeat();
     setIsConnected(false);
-    setPlayers([]);
-    setRoomCode('');
-    actions.setMultiplayerState({ isConnected: false });
-  }, [actions]);
-
-  const handleConnectionOpen = useCallback(() => {
-    console.log('🌐 Connected to game server');
-    setIsConnected(true);
-    setConnectionError(null);
-    reconnectAttemptsRef.current = 0;
-
-    // Enviar datos de autenticación
-    sendMessage({
-      type: 'auth',
-      data: {
-        playerName: state.playerName,
-        version: '1.0.0'
-      }
-    });
-
-    // Iniciar ping para medir latencia
-    startPing();
-
-    actions.setMultiplayerState({ isConnected: true });
-  }, [state.playerName, actions]);
-
-  const handleConnectionClose = useCallback((event) => {
-    console.log('🔌 Disconnected from server:', event.reason);
-    setIsConnected(false);
-    actions.setMultiplayerState({ isConnected: false });
-
-    // Intentar reconexión si no fue intencional
-    if (!event.wasClean && reconnectAttemptsRef.current < maxReconnectAttempts) {
-      setTimeout(() => {
-        reconnectAttemptsRef.current++;
-        console.log(`Attempting reconnection ${reconnectAttemptsRef.current}/${maxReconnectAttempts}`);
-        connect();
-      }, 2000 * reconnectAttemptsRef.current);
-    }
-  }, [actions, connect]);
-
-  const handleConnectionError = useCallback((error) => {
-    console.error('🚨 WebSocket error:', error);
-    setConnectionError('Connection failed');
+    setConnectionState('disconnected');
   }, []);
 
+  const reconnect = useCallback(async () => {
+    if (reconnectAttempts >= config.connection.maxReconnectAttempts) {
+      setConnectionState('failed');
+      return;
+    }
+
+    setReconnectAttempts(prev => prev + 1);
+    setConnectionState('reconnecting');
+
+    try {
+      await new Promise(resolve =>
+        setTimeout(resolve, config.connection.reconnectInterval * reconnectAttempts)
+      );
+      await connect();
+    } catch (error) {
+      console.error('Reconnection failed:', error);
+      reconnect(); // Try again
+    }
+  }, [reconnectAttempts, config, connect]);
+
   // ========================================
-  // 📨 MANEJO DE MENSAJES
+  // 📨 MESSAGE HANDLING
   // ========================================
 
   const handleMessage = useCallback((event) => {
@@ -108,36 +110,24 @@ export function useNetworkSync() {
       const message = JSON.parse(event.data);
 
       switch (message.type) {
-        case 'pong':
-          handlePong(message.data);
-          break;
-
-        case 'room_created':
-          handleRoomCreated(message.data);
-          break;
-
-        case 'room_joined':
-          handleRoomJoined(message.data);
-          break;
-
-        case 'player_joined':
-          handlePlayerJoined(message.data);
-          break;
-
-        case 'player_left':
-          handlePlayerLeft(message.data);
-          break;
-
-        case 'game_state':
-          handleGameState(message.data);
-          break;
-
         case 'player_update':
           handlePlayerUpdate(message.data);
           break;
 
-        case 'game_event':
-          handleGameEvent(message.data);
+        case 'room_update':
+          handleRoomUpdate(message.data);
+          break;
+
+        case 'game_state':
+          handleGameStateUpdate(message.data);
+          break;
+
+        case 'ping':
+          handlePing(message.data);
+          break;
+
+        case 'pong':
+          handlePong(message.data);
           break;
 
         case 'error':
@@ -148,212 +138,171 @@ export function useNetworkSync() {
           console.warn('Unknown message type:', message.type);
       }
     } catch (error) {
-      console.error('Error parsing message:', error);
+      console.error('Failed to parse message:', error);
     }
   }, []);
 
-  const sendMessage = useCallback((message) => {
+  const handlePlayerUpdate = useCallback((data) => {
+    setPlayersData(prev => {
+      const newMap = new Map(prev);
+      data.players.forEach(player => {
+        newMap.set(player.id, {
+          ...newMap.get(player.id),
+          ...player,
+          lastUpdate: Date.now()
+        });
+      });
+      return newMap;
+    });
+
+    // Update game engine entities
+    if (gameEngine) {
+      data.players.forEach(playerData => {
+        const entity = gameEngine.getEntityByNetId(playerData.id);
+        if (entity) {
+          // Apply interpolation for smooth movement
+          interpolatePlayerPosition(entity, playerData);
+        }
+      });
+    }
+  }, [gameEngine]);
+
+  const handleRoomUpdate = useCallback((data) => {
+    setRoomData(data);
+  }, []);
+
+  const handleGameStateUpdate = useCallback((data) => {
+    if (gameEngine) {
+      // Sync game state with server
+      gameEngine.syncFromNetwork(data);
+    }
+  }, [gameEngine]);
+
+  const handlePing = useCallback((data) => {
+    sendMessage('pong', { timestamp: data.timestamp });
+  }, []);
+
+  const handlePong = useCallback((data) => {
+    const now = Date.now();
+    const roundTripTime = now - data.timestamp;
+    setLatency(roundTripTime / 2);
+  }, []);
+
+  const handleServerError = useCallback((data) => {
+    console.error('Server error:', data);
+  }, []);
+
+  const handleError = useCallback((error) => {
+    console.error('WebSocket error:', error);
+    setConnectionState('error');
+  }, []);
+
+  const handleClose = useCallback((event) => {
+    setIsConnected(false);
+    stopHeartbeat();
+
+    if (event.code !== 1000 && event.code !== 1001) {
+      // Unexpected close, attempt reconnect
+      setConnectionState('reconnecting');
+      reconnectTimeoutRef.current = setTimeout(reconnect, config.connection.reconnectInterval);
+    } else {
+      setConnectionState('disconnected');
+    }
+  }, [reconnect, config]);
+
+  // ========================================
+  // 💌 MESSAGE SENDING
+  // ========================================
+
+  const sendMessage = useCallback((type, data = {}) => {
+    const message = {
+      type,
+      data,
+      timestamp: Date.now()
+    };
+
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
     } else {
-      // Queue message for when connection is restored
+      // Queue message for later
       messageQueueRef.current.push(message);
     }
   }, []);
 
+  const flushMessageQueue = useCallback(() => {
+    while (messageQueueRef.current.length > 0) {
+      const message = messageQueueRef.current.shift();
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify(message));
+      }
+    }
+  }, []);
+
   // ========================================
-  // 🏠 GESTIÓN DE SALAS
+  // 💓 HEARTBEAT SYSTEM
   // ========================================
 
-  const createRoom = useCallback((options = {}) => {
-    sendMessage({
-      type: 'create_room',
-      data: {
-        maxPlayers: options.maxPlayers || 4,
-        gameMode: options.gameMode || 'cooperative',
-        isPrivate: options.isPrivate || false,
-        password: options.password
-      }
-    });
+  const startHeartbeat = useCallback(() => {
+    stopHeartbeat();
+    heartbeatIntervalRef.current = setInterval(() => {
+      sendMessage('ping', { timestamp: Date.now() });
+    }, config.connection.heartbeatInterval);
+  }, [config, sendMessage]);
+
+  const stopHeartbeat = useCallback(() => {
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
+    }
+  }, []);
+
+  // ========================================
+  // 🔄 INTERPOLATION SYSTEM
+  // ========================================
+
+  const interpolatePlayerPosition = useCallback((entity, targetData) => {
+    if (!entity || !targetData.position) return;
+
+    const currentPos = entity.position;
+    const targetPos = targetData.position;
+
+    // Calculate interpolation factor based on latency
+    const lerpFactor = Math.min(latency / 100, 1); // Max 100ms interpolation
+
+    // Smooth interpolation
+    entity.position.x += (targetPos.x - currentPos.x) * lerpFactor;
+    entity.position.y += (targetPos.y - currentPos.y) * lerpFactor;
+    entity.position.z += (targetPos.z - currentPos.z) * lerpFactor;
+
+    // Update rotation if available
+    if (targetData.rotation) {
+      entity.rotation.y += (targetData.rotation.y - entity.rotation.y) * lerpFactor;
+    }
+  }, [latency]);
+
+  // ========================================
+  // 🎮 GAME SYNC METHODS
+  // ========================================
+
+  const syncPlayerState = useCallback((playerData) => {
+    sendMessage('player_update', playerData);
   }, [sendMessage]);
 
-  const joinRoom = useCallback((roomCode, password = null) => {
-    sendMessage({
-      type: 'join_room',
-      data: {
-        roomCode,
-        password
-      }
-    });
+  const syncGameAction = useCallback((action) => {
+    sendMessage('game_action', action);
+  }, [sendMessage]);
+
+  const joinRoom = useCallback((roomId, playerData) => {
+    sendMessage('join_room', { roomId, player: playerData });
   }, [sendMessage]);
 
   const leaveRoom = useCallback(() => {
-    sendMessage({
-      type: 'leave_room'
-    });
+    sendMessage('leave_room');
   }, [sendMessage]);
 
-  const handleRoomCreated = useCallback((data) => {
-    setRoomCode(data.roomCode);
-    setPlayers([data.host]);
-    actions.setRoomCode(data.roomCode);
-    actions.setMultiplayerState({
-      isHost: true,
-      roomCode: data.roomCode
-    });
-    console.log('🏠 Room created:', data.roomCode);
-  }, [actions]);
-
-  const handleRoomJoined = useCallback((data) => {
-    setRoomCode(data.roomCode);
-    setPlayers(data.players);
-    actions.setRoomCode(data.roomCode);
-    actions.updatePlayerList(data.players);
-    actions.setMultiplayerState({
-      isHost: false,
-      roomCode: data.roomCode
-    });
-    console.log('🚪 Joined room:', data.roomCode);
-  }, [actions]);
-
-  // ========================================
-  // 👥 GESTIÓN DE JUGADORES
-  // ========================================
-
-  const handlePlayerJoined = useCallback((data) => {
-    setPlayers(prev => [...prev, data.player]);
-    actions.updatePlayerList([...players, data.player]);
-    console.log('👤 Player joined:', data.player.name);
-  }, [actions, players]);
-
-  const handlePlayerLeft = useCallback((data) => {
-    setPlayers(prev => prev.filter(p => p.id !== data.playerId));
-    actions.updatePlayerList(players.filter(p => p.id !== data.playerId));
-    console.log('👋 Player left:', data.playerId);
-  }, [actions, players]);
-
-  const handlePlayerUpdate = useCallback((data) => {
-    // Actualizar estado del jugador remoto
-    setPlayers(prev => prev.map(p =>
-      p.id === data.playerId
-        ? { ...p, ...data.state }
-        : p
-    ));
-  }, []);
-
-  // ========================================
-  // 🎮 SINCRONIZACIÓN DEL JUEGO
-  // ========================================
-
-  const syncPlayerState = useCallback((playerState) => {
-    sendMessage({
-      type: 'player_update',
-      data: {
-        position: playerState.position,
-        rotation: playerState.rotation,
-        animation: playerState.animation,
-        health: playerState.health,
-        timestamp: Date.now()
-      }
-    });
+  const createRoom = useCallback((roomConfig) => {
+    sendMessage('create_room', roomConfig);
   }, [sendMessage]);
-
-  const sendGameEvent = useCallback((eventType, eventData) => {
-    sendMessage({
-      type: 'game_event',
-      data: {
-        eventType,
-        eventData,
-        timestamp: Date.now()
-      }
-    });
-  }, [sendMessage]);
-
-  const handleGameState = useCallback((data) => {
-    // Sincronizar estado del juego completo
-    if (data.gameState) {
-      // Aplicar estado del juego sin sobrescribir datos locales importantes
-      actions.updateScore(data.gameState.score);
-      actions.updateLevel(data.gameState.level);
-    }
-  }, [actions]);
-
-  const handleGameEvent = useCallback((data) => {
-    const { eventType, eventData, playerId } = data;
-
-    switch (eventType) {
-      case 'player_damaged':
-        console.log(`Player ${playerId} took damage:`, eventData.damage);
-        break;
-
-      case 'collectible_picked':
-        console.log(`Player ${playerId} collected:`, eventData.type);
-        break;
-
-      case 'enemy_defeated':
-        console.log(`Player ${playerId} defeated enemy:`, eventData.enemyId);
-        break;
-
-      case 'level_completed':
-        console.log(`Player ${playerId} completed level:`, eventData.level);
-        break;
-
-      default:
-        console.log('Unknown game event:', eventType, eventData);
-    }
-  }, []);
-
-  // ========================================
-  // 📊 LATENCIA Y PING
-  // ========================================
-
-  const startPing = useCallback(() => {
-    const pingInterval = setInterval(() => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        lastPingRef.current = Date.now();
-        sendMessage({
-          type: 'ping',
-          data: { timestamp: lastPingRef.current }
-        });
-      } else {
-        clearInterval(pingInterval);
-      }
-    }, 5000); // Ping cada 5 segundos
-
-    return () => clearInterval(pingInterval);
-  }, [sendMessage]);
-
-  const handlePong = useCallback((data) => {
-    const currentTime = Date.now();
-    const pingTime = currentTime - data.timestamp;
-    setLatency(pingTime);
-  }, []);
-
-  // ========================================
-  // 🔐 MANEJO DE ERRORES
-  // ========================================
-
-  const handleServerError = useCallback((error) => {
-    console.error('Server error:', error);
-    setConnectionError(error.message);
-
-    switch (error.code) {
-      case 'ROOM_FULL':
-        alert('Room is full');
-        break;
-      case 'ROOM_NOT_FOUND':
-        alert('Room not found');
-        break;
-      case 'INVALID_PASSWORD':
-        alert('Invalid password');
-        break;
-      case 'PLAYER_LIMIT_REACHED':
-        alert('Too many players connected');
-        break;
-      default:
-        alert(`Server error: ${error.message}`);
-    }
-  }, []);
 
   // ========================================
   // 🧹 CLEANUP
@@ -362,62 +311,39 @@ export function useNetworkSync() {
   useEffect(() => {
     return () => {
       disconnect();
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
     };
   }, [disconnect]);
-
-  // Auto-sync cuando hay cambios en el estado local
-  useEffect(() => {
-    if (isConnected && state.isPlaying) {
-      // Sync player state every frame would be too much
-      // Instead, sync on significant changes or at intervals
-      const syncInterval = setInterval(() => {
-        if (state.isPlaying) {
-          syncPlayerState({
-            position: state.playerPosition,
-            health: state.health,
-            score: state.score
-          });
-        }
-      }, 100); // 10 FPS sync rate
-
-      return () => clearInterval(syncInterval);
-    }
-  }, [isConnected, state.isPlaying, syncPlayerState, state]);
-
-  // ========================================
-  // 📤 API PÚBLICA
-  // ========================================
 
   return {
     // Connection state
     isConnected,
-    connectionError,
+    connectionState,
     latency,
+    reconnectAttempts,
 
-    // Room management
-    roomCode,
-    players,
-    createRoom,
-    joinRoom,
-    leaveRoom,
+    // Data
+    playersData,
+    roomData,
 
-    // Network functions
+    // Connection methods
     connect,
     disconnect,
-    sendMessage,
-    syncPlayerState,
-    sendGameEvent,
+    reconnect,
 
-    // Utilities
-    getPlayerCount: () => players.length,
-    isHost: () => state.multiplayer.isHost,
-    getPlayer: (id) => players.find(p => p.id === id),
-    getRoomInfo: () => ({
-      code: roomCode,
-      playerCount: players.length,
-      maxPlayers: state.multiplayer.maxPlayers,
-      gameMode: state.multiplayer.gameMode
-    })
+    // Communication
+    sendMessage,
+
+    // Game sync
+    syncPlayerState,
+    syncGameAction,
+
+    // Room management
+    joinRoom,
+    leaveRoom,
+    createRoom
   };
 }
 

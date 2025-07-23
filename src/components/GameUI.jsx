@@ -1,267 +1,197 @@
 /* ============================================================================ */
 /* 🎮 CRASH WORM 3D - INTERFAZ DE USUARIO DEL JUEGO */
 /* ============================================================================ */
+/* Ubicación: src/components/GameUI.jsx */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useGame } from '@/context/GameContext';
-import { gameConfig } from '@/data/gameConfig';
-import { TimeUtils, GameUtils } from '@/utils/gameUtils';
-import useAudioManager from '@/hooks/useAudioManager';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useGameContext } from '../context/GameContext';
+import { useAudioManager } from '../hooks/useAudioManager';
+import { DeviceUtils, TimeUtils, GameUtils } from '../utils/gameUtils';
 
 // ========================================
-// 🎮 COMPONENTE PRINCIPAL DE UI
+// 🎯 COMPONENTE PRINCIPAL DE UI
 // ========================================
 
 export function GameUI() {
-  const { state, actions, utils } = useGame();
+  const {
+    gameState,
+    player,
+    settings,
+    ui,
+    performance,
+    room,
+    toggleUI,
+    showNotification,
+    updatePerformance
+  } = useGameContext();
+
   const { playSound } = useAudioManager();
+  const [currentTime, setCurrentTime] = useState(Date.now());
 
-  const [showMinimap, setShowMinimap] = useState(true);
-  const [showPerformance, setShowPerformance] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [combos, setCombos] = useState([]);
-
-  const notificationIdRef = useRef(0);
-  const comboTimeoutRef = useRef(null);
-
-  // ========================================
-  // 📊 SISTEMA DE NOTIFICACIONES
-  // ========================================
-
-  const addNotification = useCallback((message, type = 'info', duration = 3000) => {
-    const notification = {
-      id: notificationIdRef.current++,
-      message,
-      type,
-      createdAt: Date.now(),
-      duration
-    };
-
-    setNotifications(prev => [...prev, notification]);
-
-    setTimeout(() => {
-      setNotifications(prev => prev.filter(n => n.id !== notification.id));
-    }, duration);
-  }, []);
-
-  const addCombo = useCallback((points, multiplier) => {
-    const combo = {
-      id: Date.now(),
-      points,
-      multiplier,
-      createdAt: Date.now()
-    };
-
-    setCombos(prev => [...prev, combo]);
-
-    setTimeout(() => {
-      setCombos(prev => prev.filter(c => c.id !== combo.id));
-    }, 2000);
-  }, []);
-
-  // ========================================
-  // 🔄 EFECTOS Y LISTENERS
-  // ========================================
-
+  // Update current time every second
   useEffect(() => {
-    // Escuchar eventos del juego para mostrar notificaciones
-    const handleScoreUpdate = (points) => {
-      if (points > 100) {
-        addNotification(`+${points} points!`, 'success');
-      }
-    };
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
-    const handleLevelUp = () => {
-      addNotification('Level Up!', 'success', 4000);
-      playSound('levelUp');
-    };
-
-    const handleHealthLow = () => {
-      if (state.health <= 25 && state.health > 0) {
-        addNotification('Health Low!', 'warning', 2000);
-      }
-    };
-
-    const handleCollectible = () => {
-      playSound('uiCollect', { volume: 0.3 });
-    };
-
-    // Simular listeners (en un juego real estos vendrían del GameEngine)
-    handleHealthLow();
-
-    return () => {
-      if (comboTimeoutRef.current) {
-        clearTimeout(comboTimeoutRef.current);
-      }
-    };
-  }, [state.health, state.score, state.level, addNotification, playSound]);
-
-  // ========================================
-  // 🎯 CONTROLES DE UI
-  // ========================================
-
-  const toggleMinimap = useCallback(() => {
-    setShowMinimap(prev => !prev);
-    playSound('click');
-  }, [playSound]);
-
-  const togglePerformance = useCallback(() => {
-    setShowPerformance(prev => !prev);
-    playSound('click');
-  }, [playSound]);
-
-  if (!utils.isPlaying && !utils.isPaused) return null;
+  // Don't render UI during loading
+  if (gameState === 'LOADING') {
+    return null;
+  }
 
   return (
-    <div className="hud">
-      {/* HUD Principal */}
-      <HUDElements
-        state={state}
-        utils={utils}
-        actions={actions}
-        onNotification={addNotification}
-      />
+    <div className="game-ui-overlay">
+      {/* HUD Elements */}
+      <HUD />
 
-      {/* Barra de Salud */}
-      <HealthBar
-        health={state.health}
-        maxHealth={state.maxHealth}
-        isLow={state.health <= 25}
-      />
+      {/* Health Bar */}
+      <HealthBar />
 
-      {/* Panel de Puntuación */}
-      <ScorePanel
-        score={state.score}
-        level={state.level}
-        collectibles={state.collectibles}
-        totalCollectibles={state.totalCollectibles}
-        lives={state.lives}
-      />
+      {/* Score Display */}
+      <ScoreDisplay />
 
-      {/* Timer del Nivel */}
-      <LevelTimer
-        timeElapsed={state.timeElapsed}
-        levelStartTime={state.levelStartTime}
-      />
+      {/* Minimap */}
+      <Minimap />
 
-      {/* Minimapa */}
-      {showMinimap && (
-        <Minimap
-          playerPosition={state.playerPosition}
-          enemies={state.enemies}
-          collectibles={state.collectiblePositions}
-          onToggle={toggleMinimap}
-        />
-      )}
+      {/* Power-ups Display */}
+      <PowerUpsDisplay />
 
-      {/* Combos y Efectos */}
-      <ComboDisplay combos={combos} />
+      {/* Chat (Multiplayer) */}
+      {room.id && <ChatSystem />}
 
-      {/* Notificaciones */}
-      <NotificationSystem notifications={notifications} />
+      {/* Performance Monitor */}
+      {(ui.showFPS || settings.gameplay.showDebugInfo) && <PerformanceMonitor />}
 
-      {/* Controles Touch (móvil) */}
-      <TouchControls />
+      {/* Touch Controls (Mobile) */}
+      {DeviceUtils.isMobile() && <TouchControls />}
 
-      {/* Panel de Pausa */}
-      {utils.isPaused && <PauseOverlay />}
+      {/* Notifications */}
+      <NotificationSystem />
 
-      {/* Indicadores de Debug */}
-      {import.meta.env.DEV && showPerformance && (
-        <PerformanceMonitor onToggle={togglePerformance} />
-      )}
+      {/* Pause Menu */}
+      {ui.showPauseMenu && <PauseMenu />}
 
-      {/* Botones de Control */}
-      <ControlButtons
-        onToggleMinimap={toggleMinimap}
-        onTogglePerformance={togglePerformance}
-        showMinimap={showMinimap}
-        showPerformance={showPerformance}
-      />
+      {/* Settings Menu */}
+      {ui.showSettings && <SettingsMenu />}
+
+      {/* Inventory */}
+      {ui.showInventory && <Inventory />}
     </div>
   );
 }
 
 // ========================================
-// 💗 COMPONENTE DE BARRA DE SALUD
+// 📊 HUD PRINCIPAL
 // ========================================
 
-function HealthBar({ health, maxHealth, isLow }) {
-  const healthPercentage = (health / maxHealth) * 100;
+function HUD() {
+  const { player, currentLevel } = useGameContext();
 
   return (
-    <div className="health-bar">
-      <div className="health-bg">
-        <div
-          className={`health-fill ${isLow ? 'health-low' : ''}`}
-          style={{ width: `${healthPercentage}%` }}
-        />
-        <div className="health-segments">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="health-segment" />
-          ))}
+    <div className="hud hud-top-left">
+      <div className="hud-section">
+        <div className="hud-item">
+          <span className="hud-label">Level:</span>
+          <span className="hud-value">{currentLevel}</span>
+        </div>
+
+        <div className="hud-item">
+          <span className="hud-label">Lives:</span>
+          <span className="hud-value">{'❤️'.repeat(player.lives)}</span>
+        </div>
+
+        <div className="hud-item">
+          <span className="hud-label">Coins:</span>
+          <span className="hud-value gold">🪙 {player.coins}</span>
         </div>
       </div>
-      <div className="health-text">
-        {health}/{maxHealth}
-      </div>
-      <div className="health-icon">❤️</div>
     </div>
   );
 }
 
 // ========================================
-// 📊 PANEL DE PUNTUACIÓN
+// ❤️ BARRA DE SALUD
 // ========================================
 
-function ScorePanel({ score, level, collectibles, totalCollectibles, lives }) {
+function HealthBar() {
+  const { player } = useGameContext();
+  const healthPercent = (player.health / 100) * 100;
+
+  const healthBarStyle = {
+    width: `${healthPercent}%`,
+    background: getHealthColor(player.health)
+  };
+
   return (
-    <div className="score-panel">
+    <div className="hud hud-top-left" style={{ top: '80px' }}>
+      <div className="health-bar">
+        <div className="health-bar-fill" style={healthBarStyle}></div>
+        <div className="health-bar-text">
+          {player.health}/100
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function getHealthColor(health) {
+  if (health > 70) return 'linear-gradient(90deg, #10b981, #34d399)';
+  if (health > 30) return 'linear-gradient(90deg, #f59e0b, #fbbf24)';
+  return 'linear-gradient(90deg, #ef4444, #f87171)';
+}
+
+// ========================================
+// 🏆 DISPLAY DE PUNTUACIÓN
+// ========================================
+
+function ScoreDisplay() {
+  const { player } = useGameContext();
+  const [animatedScore, setAnimatedScore] = useState(player.score);
+  const [scoreChange, setScoreChange] = useState(null);
+
+  // Animate score changes
+  useEffect(() => {
+    if (player.score !== animatedScore) {
+      const difference = player.score - animatedScore;
+      setScoreChange(difference);
+
+      // Animate score counting up
+      const duration = 500;
+      const startTime = Date.now();
+      const startScore = animatedScore;
+
+      const animateScore = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+
+        const currentScore = Math.floor(startScore + (difference * progress));
+        setAnimatedScore(currentScore);
+
+        if (progress < 1) {
+          requestAnimationFrame(animateScore);
+        } else {
+          setScoreChange(null);
+        }
+      };
+
+      animateScore();
+    }
+  }, [player.score, animatedScore]);
+
+  return (
+    <div className="hud hud-top-right">
       <div className="score-display">
         <div className="score-label">SCORE</div>
-        <div className="score-value">{GameUtils.formatNumber(score)}</div>
-      </div>
-
-      <div className="level-display">
-        <div className="level-label">LEVEL</div>
-        <div className="level-value">{level}</div>
-      </div>
-
-      <div className="collectibles-display">
-        <div className="collectibles-label">GEMS</div>
-        <div className="collectibles-value">
-          {collectibles}/{totalCollectibles}
+        <div className="score-value">
+          {GameUtils.formatScore(animatedScore)}
         </div>
-        <div className="collectibles-bar">
-          <div
-            className="collectibles-fill"
-            style={{ width: `${(collectibles / totalCollectibles) * 100}%` }}
-          />
-        </div>
-      </div>
-
-      <div className="lives-display">
-        <div className="lives-label">LIVES</div>
-        <div className="lives-icons">
-          {[...Array(Math.max(0, lives))].map((_, i) => (
-            <span key={i} className="life-icon">🎮</span>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ========================================
-// ⏱️ TIMER DEL NIVEL
-// ========================================
-
-function LevelTimer({ timeElapsed }) {
-  return (
-    <div className="level-timer">
-      <div className="timer-icon">⏱️</div>
-      <div className="timer-value">
-        {TimeUtils.formatTime(timeElapsed)}
+        {scoreChange && (
+          <div className={`score-change ${scoreChange > 0 ? 'positive' : 'negative'}`}>
+            {scoreChange > 0 ? '+' : ''}{GameUtils.formatScore(scoreChange)}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -271,386 +201,365 @@ function LevelTimer({ timeElapsed }) {
 // 🗺️ MINIMAPA
 // ========================================
 
-function Minimap({ playerPosition, enemies = [], collectibles = [], onToggle }) {
-  const mapRef = useRef();
-  const scale = 0.1; // Escala del minimapa
+function Minimap() {
+  const { player, ui } = useGameContext();
+  const [mapData, setMapData] = useState({ entities: [], bounds: { width: 100, height: 100 } });
+
+  if (!ui.showMinimap) return null;
 
   return (
-    <div className="minimap">
-      <div className="minimap-header">
-        <span>MAP</span>
-        <button onClick={onToggle} className="minimap-toggle">×</button>
-      </div>
-
-      <div className="minimap-content" ref={mapRef}>
-        <svg width="150" height="150" viewBox="0 0 150 150">
-          {/* Fondo */}
-          <rect width="150" height="150" fill="#1a1a1a" stroke="#333" strokeWidth="2" />
-
-          {/* Grid */}
-          <defs>
-            <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
-              <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#333" strokeWidth="0.5"/>
-            </pattern>
-          </defs>
-          <rect width="150" height="150" fill="url(#grid)" />
-
-          {/* Coleccionables */}
-          {collectibles.map((pos, i) => (
-            <circle
-              key={`collectible-${i}`}
-              cx={75 + pos.x * scale}
-              cy={75 - pos.z * scale}
-              r="2"
-              fill="#ffff00"
-            />
-          ))}
-
-          {/* Enemigos */}
-          {enemies.map((enemy, i) => (
-            <circle
-              key={`enemy-${i}`}
-              cx={75 + enemy.position.x * scale}
-              cy={75 - enemy.position.z * scale}
-              r="3"
-              fill="#ff4444"
-            />
-          ))}
-
-          {/* Jugador */}
-          <circle
-            cx={75 + (playerPosition?.x || 0) * scale}
-            cy={75 - (playerPosition?.z || 0) * scale}
-            r="4"
-            fill="#00ff00"
-            stroke="#ffffff"
-            strokeWidth="1"
+    <div className="hud hud-bottom-right">
+      <div className="minimap">
+        <div className="minimap-content">
+          {/* Player dot */}
+          <div
+            className="minimap-player"
+            style={{
+              left: `${(player.position.x / mapData.bounds.width) * 100}%`,
+              top: `${(player.position.z / mapData.bounds.height) * 100}%`
+            }}
           />
 
-          {/* Dirección del jugador */}
-          <line
-            x1={75 + (playerPosition?.x || 0) * scale}
-            y1={75 - (playerPosition?.z || 0) * scale}
-            x2={75 + (playerPosition?.x || 0) * scale + 6}
-            y2={75 - (playerPosition?.z || 0) * scale}
-            stroke="#00ff00"
-            strokeWidth="2"
-          />
-        </svg>
+          {/* Other entities */}
+          {mapData.entities.map((entity, index) => (
+            <div
+              key={index}
+              className={`minimap-entity minimap-${entity.type}`}
+              style={{
+                left: `${(entity.position.x / mapData.bounds.width) * 100}%`,
+                top: `${(entity.position.z / mapData.bounds.height) * 100}%`
+              }}
+            />
+          ))}
+        </div>
+
+        <div className="minimap-border"></div>
       </div>
     </div>
   );
 }
 
 // ========================================
-// 🎯 DISPLAY DE COMBOS
+// 💫 DISPLAY DE POWER-UPS
 // ========================================
 
-function ComboDisplay({ combos }) {
+function PowerUpsDisplay() {
+  const { player } = useGameContext();
+
+  if (!player.powerUps.length) return null;
+
   return (
-    <div className="combo-display">
-      {combos.map(combo => (
-        <ComboText key={combo.id} combo={combo} />
-      ))}
+    <div className="hud hud-bottom-left">
+      <div className="powerups-display">
+        <div className="powerups-label">Active Power-ups</div>
+        <div className="powerups-list">
+          {player.powerUps.map((powerUp, index) => (
+            <PowerUpItem key={powerUp.id || index} powerUp={powerUp} />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
-function ComboText({ combo }) {
-  const [opacity, setOpacity] = useState(1);
-  const [scale, setScale] = useState(1);
+function PowerUpItem({ powerUp }) {
+  const [timeLeft, setTimeLeft] = useState(powerUp.duration || 0);
 
   useEffect(() => {
-    const startTime = Date.now();
-    const duration = 2000;
+    if (!powerUp.duration || powerUp.duration === 0) return;
 
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = elapsed / duration;
+    const interval = setInterval(() => {
+      setTimeLeft(prev => {
+        const newTime = prev - 100;
+        return newTime <= 0 ? 0 : newTime;
+      });
+    }, 100);
 
-      if (progress >= 1) return;
+    return () => clearInterval(interval);
+  }, [powerUp.duration]);
 
-      // Animación de escala
-      if (progress < 0.2) {
-        setScale(1 + progress * 2);
-      } else {
-        setScale(1.4 - (progress - 0.2) * 0.5);
-      }
-
-      // Fade out
-      if (progress > 0.7) {
-        setOpacity(1 - ((progress - 0.7) / 0.3));
-      }
-
-      requestAnimationFrame(animate);
-    };
-
-    animate();
-  }, []);
+  const progress = powerUp.duration ? (timeLeft / powerUp.duration) * 100 : 100;
 
   return (
-    <div
-      className="combo-text"
-      style={{
-        opacity,
-        transform: `scale(${scale})`,
-        color: combo.multiplier > 2 ? '#ff00ff' : '#ffff00'
-      }}
-    >
-      <div className="combo-points">+{combo.points}</div>
-      {combo.multiplier > 1 && (
-        <div className="combo-multiplier">x{combo.multiplier}</div>
+    <div className="powerup-item">
+      <div className="powerup-icon" style={{ color: powerUp.color }}>
+        {powerUp.icon || '⭐'}
+      </div>
+      <div className="powerup-info">
+        <div className="powerup-name">{powerUp.name}</div>
+        {powerUp.duration > 0 && (
+          <div className="powerup-timer">
+            <div className="powerup-timer-bar">
+              <div
+                className="powerup-timer-fill"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <span className="powerup-timer-text">
+              {TimeUtils.formatTime(timeLeft / 1000)}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ========================================
+// 💬 SISTEMA DE CHAT (MULTIPLAYER)
+// ========================================
+
+function ChatSystem() {
+  const { room, ui, toggleUI } = useGameContext();
+  const [messages, setMessages] = useState([]);
+  const [inputValue, setInputValue] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+
+  const sendMessage = useCallback((message) => {
+    if (!message.trim()) return;
+
+    const newMessage = {
+      id: Date.now(),
+      text: message,
+      sender: 'You',
+      timestamp: Date.now(),
+      type: 'chat'
+    };
+
+    setMessages(prev => [...prev.slice(-50), newMessage]); // Keep last 50 messages
+    setInputValue('');
+    setIsTyping(false);
+
+    // TODO: Send message to server
+  }, []);
+
+  const handleKeyPress = useCallback((e) => {
+    if (e.key === 'Enter') {
+      sendMessage(inputValue);
+    } else if (e.key === 'Escape') {
+      toggleUI('showChat', false);
+      setIsTyping(false);
+    }
+  }, [inputValue, sendMessage, toggleUI]);
+
+  if (!ui.showChat) {
+    return (
+      <button
+        className="chat-toggle-btn hud hud-bottom-left"
+        onClick={() => toggleUI('showChat', true)}
+      >
+        💬
+      </button>
+    );
+  }
+
+  return (
+    <div className="chat-system hud hud-bottom-left">
+      <div className="chat-header">
+        <span>Chat ({room.players.length} players)</span>
+        <button
+          className="chat-close"
+          onClick={() => toggleUI('showChat', false)}
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="chat-messages">
+        {messages.map(message => (
+          <div key={message.id} className={`chat-message ${message.type}`}>
+            <span className="chat-sender">{message.sender}:</span>
+            <span className="chat-text">{message.text}</span>
+            <span className="chat-time">
+              {new Date(message.timestamp).toLocaleTimeString()}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div className="chat-input">
+        <input
+          type="text"
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={handleKeyPress}
+          onFocus={() => setIsTyping(true)}
+          onBlur={() => setIsTyping(false)}
+          placeholder="Type a message..."
+          maxLength={200}
+          className="input"
+        />
+        <button
+          onClick={() => sendMessage(inputValue)}
+          className="btn btn-primary btn-sm"
+        >
+          Send
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ========================================
+// 📊 MONITOR DE PERFORMANCE
+// ========================================
+
+function PerformanceMonitor() {
+  const { performance } = useGameContext();
+
+  return (
+    <div className="fps-counter">
+      <div>FPS: {Math.round(performance.fps || 0)}</div>
+      <div>Frame: {(performance.frameTime || 0).toFixed(1)}ms</div>
+      <div>Memory: {Math.round(performance.memoryUsage || 0)}MB</div>
+      {performance.drawCalls && (
+        <div>Calls: {performance.drawCalls}</div>
       )}
     </div>
   );
 }
 
 // ========================================
-// 📢 SISTEMA DE NOTIFICACIONES
-// ========================================
-
-function NotificationSystem({ notifications }) {
-  return (
-    <div className="notification-system">
-      {notifications.map(notification => (
-        <Notification key={notification.id} notification={notification} />
-      ))}
-    </div>
-  );
-}
-
-function Notification({ notification }) {
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    // Fade in
-    setTimeout(() => setIsVisible(true), 100);
-
-    // Fade out before removal
-    setTimeout(() => setIsVisible(false), notification.duration - 300);
-  }, [notification.duration]);
-
-  return (
-    <div
-      className={`notification notification-${notification.type} ${isVisible ? 'notification-visible' : ''}`}
-    >
-      <div className="notification-icon">
-        {notification.type === 'success' && '✅'}
-        {notification.type === 'warning' && '⚠️'}
-        {notification.type === 'error' && '❌'}
-        {notification.type === 'info' && 'ℹ️'}
-      </div>
-      <div className="notification-message">
-        {notification.message}
-      </div>
-    </div>
-  );
-}
-
-// ========================================
-// 📱 CONTROLES TÁCTILES
+// 📱 CONTROLES TÁCTILES (MÓVIL)
 // ========================================
 
 function TouchControls() {
-  const { actions } = useGame();
-  const [isMobile, setIsMobile] = useState(false);
+  const [joystickPosition, setJoystickPosition] = useState({ x: 0, y: 0 });
+  const [isJoystickActive, setIsJoystickActive] = useState(false);
+  const { playSound } = useAudioManager();
 
-  useEffect(() => {
-    setIsMobile('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  const handleJoystickStart = useCallback((e) => {
+    setIsJoystickActive(true);
+    e.preventDefault();
   }, []);
 
-  if (!isMobile) return null;
+  const handleJoystickMove = useCallback((e) => {
+    if (!isJoystickActive) return;
+
+    const touch = e.touches[0];
+    const joystick = e.currentTarget.getBoundingClientRect();
+    const centerX = joystick.left + joystick.width / 2;
+    const centerY = joystick.top + joystick.height / 2;
+
+    const deltaX = touch.clientX - centerX;
+    const deltaY = touch.clientY - centerY;
+    const distance = Math.sqrt(deltaX ** 2 + deltaY ** 2);
+    const maxDistance = joystick.width / 2;
+
+    if (distance <= maxDistance) {
+      setJoystickPosition({ x: deltaX, y: deltaY });
+    } else {
+      const angle = Math.atan2(deltaY, deltaX);
+      setJoystickPosition({
+        x: Math.cos(angle) * maxDistance,
+        y: Math.sin(angle) * maxDistance
+      });
+    }
+
+    e.preventDefault();
+  }, [isJoystickActive]);
+
+  const handleJoystickEnd = useCallback(() => {
+    setIsJoystickActive(false);
+    setJoystickPosition({ x: 0, y: 0 });
+  }, []);
+
+  const handleButtonPress = useCallback((action) => {
+    playSound('ui_click', { volume: 0.3 });
+
+    // TODO: Emit button press event
+    console.log(`Touch button pressed: ${action}`);
+  }, [playSound]);
 
   return (
     <div className="touch-controls">
-      {/* Joystick virtual */}
-      <div className="touch-joystick">
-        <VirtualJoystick />
-      </div>
-
-      {/* Botones de acción */}
-      <div className="touch-actions">
-        <button
-          className="touch-button jump-button"
-          onTouchStart={() => actions.jumpPressed()}
-          onTouchEnd={() => actions.jumpReleased()}
-        >
-          ⬆️
-        </button>
-        <button
-          className="touch-button dash-button"
-          onTouchStart={() => actions.dashPressed()}
-        >
-          💨
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function VirtualJoystick() {
-  const joystickRef = useRef();
-  const knobRef = useRef();
-  const [isDragging, setIsDragging] = useState(false);
-
-  const handleTouch = useCallback((event) => {
-    event.preventDefault();
-
-    if (!joystickRef.current || !knobRef.current) return;
-
-    const rect = joystickRef.current.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-
-    const touch = event.touches[0] || event.changedTouches[0];
-    const deltaX = touch.clientX - centerX;
-    const deltaY = touch.clientY - centerY;
-
-    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-    const maxDistance = rect.width / 2 - 10;
-
-    if (distance <= maxDistance) {
-      knobRef.current.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-    } else {
-      const angle = Math.atan2(deltaY, deltaX);
-      const x = Math.cos(angle) * maxDistance;
-      const y = Math.sin(angle) * maxDistance;
-      knobRef.current.style.transform = `translate(${x}px, ${y}px)`;
-    }
-
-    // Enviar input al juego
-    const normalizedX = Math.max(-1, Math.min(1, deltaX / maxDistance));
-    const normalizedY = Math.max(-1, Math.min(1, deltaY / maxDistance));
-
-    // Aquí enviarías las coordenadas al sistema de input
-    window.dispatchEvent(new CustomEvent('joystickMove', {
-      detail: { x: normalizedX, y: normalizedY }
-    }));
-  }, []);
-
-  const handleTouchEnd = useCallback(() => {
-    setIsDragging(false);
-    if (knobRef.current) {
-      knobRef.current.style.transform = 'translate(0px, 0px)';
-    }
-
-    window.dispatchEvent(new CustomEvent('joystickMove', {
-      detail: { x: 0, y: 0 }
-    }));
-  }, []);
-
-  return (
-    <div
-      ref={joystickRef}
-      className="virtual-joystick"
-      onTouchStart={(e) => {
-        setIsDragging(true);
-        handleTouch(e);
-      }}
-      onTouchMove={handleTouch}
-      onTouchEnd={handleTouchEnd}
-    >
-      <div ref={knobRef} className="joystick-knob" />
-    </div>
-  );
-}
-
-// ========================================
-// ⏸️ OVERLAY DE PAUSA
-// ========================================
-
-function PauseOverlay() {
-  return (
-    <div className="pause-overlay">
-      <div className="pause-content">
-        <h1>⏸️ PAUSED</h1>
-        <p>Press ESC to resume</p>
-      </div>
-    </div>
-  );
-}
-
-// ========================================
-// 🔧 MONITOR DE RENDIMIENTO
-// ========================================
-
-function PerformanceMonitor({ onToggle }) {
-  const [performance, setPerformance] = useState({
-    fps: 0,
-    memory: 0,
-    drawCalls: 0,
-    entities: 0
-  });
-
-  useEffect(() => {
-    const updatePerformance = () => {
-      setPerformance({
-        fps: Math.round(1000 / 16.67), // Simulado
-        memory: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1024 / 1024) : 0,
-        drawCalls: Math.floor(Math.random() * 100) + 50, // Simulado
-        entities: Math.floor(Math.random() * 50) + 20 // Simulado
-      });
-    };
-
-    const interval = setInterval(updatePerformance, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <div className="performance-monitor">
-      <div className="performance-header">
-        <span>PERFORMANCE</span>
-        <button onClick={onToggle}>×</button>
-      </div>
-      <div className="performance-stats">
-        <div className="stat">
-          <span className="stat-label">FPS:</span>
-          <span className="stat-value">{performance.fps}</span>
-        </div>
-        <div className="stat">
-          <span className="stat-label">Memory:</span>
-          <span className="stat-value">{performance.memory}MB</span>
-        </div>
-        <div className="stat">
-          <span className="stat-label">Draw Calls:</span>
-          <span className="stat-value">{performance.drawCalls}</span>
-        </div>
-        <div className="stat">
-          <span className="stat-label">Entities:</span>
-          <span className="stat-value">{performance.entities}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ========================================
-// 🎛️ BOTONES DE CONTROL
-// ========================================
-
-function ControlButtons({
-  onToggleMinimap,
-  onTogglePerformance,
-  showMinimap,
-  showPerformance
-}) {
-  return (
-    <div className="control-buttons">
-      <button
-        className={`control-button ${showMinimap ? 'active' : ''}`}
-        onClick={onToggleMinimap}
-        title="Toggle Minimap"
+      {/* Virtual Joystick */}
+      <div
+        className="virtual-joystick"
+        onTouchStart={handleJoystickStart}
+        onTouchMove={handleJoystickMove}
+        onTouchEnd={handleJoystickEnd}
       >
-        🗺️
-      </button>
+        <div
+          className="virtual-joystick-thumb"
+          style={{
+            transform: `translate(${joystickPosition.x}px, ${joystickPosition.y}px)`
+          }}
+        />
+      </div>
 
-      {import.meta.env.DEV && (
+      {/* Action Buttons */}
+      <div className="touch-buttons">
         <button
-          className={`control-button ${showPerformance ? 'active' : ''}`}
-          onClick={onTogglePerformance}
-          title="Toggle Performance Monitor"
+          className="touch-button"
+          onTouchStart={() => handleButtonPress('jump')}
         >
-          📊
+          ↑
+        </button>
+
+        <button
+          className="touch-button"
+          onTouchStart={() => handleButtonPress('attack')}
+        >
+          ⚡
+        </button>
+
+        <button
+          className="touch-button"
+          onTouchStart={() => handleButtonPress('run')}
+        >
+          🏃
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ========================================
+// 🔔 SISTEMA DE NOTIFICACIONES
+// ========================================
+
+function NotificationSystem() {
+  const { ui, hideNotification } = useGameContext();
+
+  return (
+    <div className="notifications-container">
+      {ui.notifications.map(notification => (
+        <Notification
+          key={notification.id}
+          notification={notification}
+          onClose={() => hideNotification(notification.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function Notification({ notification, onClose }) {
+  useEffect(() => {
+    if (notification.autoHide !== false) {
+      const timer = setTimeout(onClose, notification.duration || 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification, onClose]);
+
+  return (
+    <div className={`notification notification-${notification.type || 'info'}`}>
+      <div className="notification-content">
+        {notification.icon && (
+          <div className="notification-icon">{notification.icon}</div>
+        )}
+        <div className="notification-text">
+          {notification.title && (
+            <div className="notification-title">{notification.title}</div>
+          )}
+          <div className="notification-message">{notification.message}</div>
+        </div>
+      </div>
+
+      {notification.autoHide !== false && (
+        <button className="notification-close" onClick={onClose}>
+          ✕
         </button>
       )}
     </div>
@@ -658,39 +567,358 @@ function ControlButtons({
 }
 
 // ========================================
-// 🎯 ELEMENTOS PRINCIPALES DEL HUD
+// ⏸️ MENÚ DE PAUSA
 // ========================================
 
-function HUDElements({ state, utils, actions, onNotification }) {
-  // Este componente contendría elementos adicionales del HUD
-  // como crosshairs, objetivos, etc.
+function PauseMenu() {
+  const { toggleUI, setGameState } = useGameContext();
+  const { playSound } = useAudioManager();
+
+  const handleResumeGame = useCallback(() => {
+    playSound('ui_click');
+    toggleUI('showPauseMenu', false);
+    setGameState('PLAYING');
+  }, [playSound, toggleUI, setGameState]);
+
+  const handleShowSettings = useCallback(() => {
+    playSound('ui_click');
+    toggleUI('showSettings', true);
+  }, [playSound, toggleUI]);
+
+  const handleMainMenu = useCallback(() => {
+    playSound('ui_click');
+    setGameState('MAIN_MENU');
+    toggleUI('showPauseMenu', false);
+  }, [playSound, setGameState, toggleUI]);
 
   return (
-    <div className="hud-elements">
-      {/* Crosshair */}
-      <div className="crosshair">
-        <div className="crosshair-dot" />
+    <div className="modal-backdrop">
+      <div className="modal card">
+        <div className="card-header">
+          <h2 className="card-title">Game Paused</h2>
+        </div>
+
+        <div className="pause-menu-buttons">
+          <button className="btn btn-primary btn-lg" onClick={handleResumeGame}>
+            Resume Game
+          </button>
+
+          <button className="btn btn-secondary btn-lg" onClick={handleShowSettings}>
+            Settings
+          </button>
+
+          <button className="btn btn-secondary btn-lg" onClick={handleMainMenu}>
+            Main Menu
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ========================================
+// ⚙️ MENÚ DE CONFIGURACIÓN
+// ========================================
+
+function SettingsMenu() {
+  const {
+    settings,
+    toggleUI,
+    updateAudioSettings,
+    updateGraphicsSettings,
+    updateControlsSettings,
+    updateGameplaySettings
+  } = useGameContext();
+
+  const [activeTab, setActiveTab] = useState('audio');
+
+  const handleClose = useCallback(() => {
+    toggleUI('showSettings', false);
+  }, [toggleUI]);
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal card" style={{ maxWidth: '600px', width: '90vw' }}>
+        <div className="card-header">
+          <h2 className="card-title">Settings</h2>
+          <button className="btn btn-sm" onClick={handleClose}>✕</button>
+        </div>
+
+        <div className="settings-tabs">
+          <button
+            className={`settings-tab ${activeTab === 'audio' ? 'active' : ''}`}
+            onClick={() => setActiveTab('audio')}
+          >
+            Audio
+          </button>
+          <button
+            className={`settings-tab ${activeTab === 'graphics' ? 'active' : ''}`}
+            onClick={() => setActiveTab('graphics')}
+          >
+            Graphics
+          </button>
+          <button
+            className={`settings-tab ${activeTab === 'controls' ? 'active' : ''}`}
+            onClick={() => setActiveTab('controls')}
+          >
+            Controls
+          </button>
+          <button
+            className={`settings-tab ${activeTab === 'gameplay' ? 'active' : ''}`}
+            onClick={() => setActiveTab('gameplay')}
+          >
+            Gameplay
+          </button>
+        </div>
+
+        <div className="settings-content">
+          {activeTab === 'audio' && (
+            <AudioSettings
+              settings={settings.audio}
+              onChange={updateAudioSettings}
+            />
+          )}
+          {activeTab === 'graphics' && (
+            <GraphicsSettings
+              settings={settings.graphics}
+              onChange={updateGraphicsSettings}
+            />
+          )}
+          {activeTab === 'controls' && (
+            <ControlsSettings
+              settings={settings.controls}
+              onChange={updateControlsSettings}
+            />
+          )}
+          {activeTab === 'gameplay' && (
+            <GameplaySettings
+              settings={settings.gameplay}
+              onChange={updateGameplaySettings}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Audio Settings Component
+function AudioSettings({ settings, onChange }) {
+  return (
+    <div className="settings-section">
+      <div className="setting-item">
+        <label>Master Volume</label>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.1"
+          value={settings.masterVolume}
+          onChange={(e) => onChange({ masterVolume: parseFloat(e.target.value) })}
+        />
+        <span>{Math.round(settings.masterVolume * 100)}%</span>
       </div>
 
-      {/* Objetivo del nivel */}
-      {state.levelObjective && (
-        <div className="level-objective">
-          <div className="objective-title">OBJECTIVE</div>
-          <div className="objective-text">{state.levelObjective}</div>
-        </div>
-      )}
+      <div className="setting-item">
+        <label>Music Volume</label>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.1"
+          value={settings.musicVolume}
+          onChange={(e) => onChange({ musicVolume: parseFloat(e.target.value) })}
+        />
+        <span>{Math.round(settings.musicVolume * 100)}%</span>
+      </div>
 
-      {/* Indicador de power-up activo */}
-      {state.activePowerups && state.activePowerups.length > 0 && (
-        <div className="active-powerups">
-          {state.activePowerups.map((powerup, i) => (
-            <div key={i} className="powerup-indicator">
-              <div className="powerup-icon">{powerup.icon}</div>
-              <div className="powerup-timer">{powerup.remainingTime}s</div>
-            </div>
-          ))}
+      <div className="setting-item">
+        <label>SFX Volume</label>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.1"
+          value={settings.sfxVolume}
+          onChange={(e) => onChange({ sfxVolume: parseFloat(e.target.value) })}
+        />
+        <span>{Math.round(settings.sfxVolume * 100)}%</span>
+      </div>
+
+      <div className="setting-item">
+        <label>
+          <input
+            type="checkbox"
+            checked={settings.muted}
+            onChange={(e) => onChange({ muted: e.target.checked })}
+          />
+          Mute All
+        </label>
+      </div>
+    </div>
+  );
+}
+
+// Graphics Settings Component
+function GraphicsSettings({ settings, onChange }) {
+  return (
+    <div className="settings-section">
+      <div className="setting-item">
+        <label>Quality</label>
+        <select
+          value={settings.quality}
+          onChange={(e) => onChange({ quality: e.target.value })}
+        >
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+          <option value="ultra">Ultra</option>
+        </select>
+      </div>
+
+      <div className="setting-item">
+        <label>
+          <input
+            type="checkbox"
+            checked={settings.shadows}
+            onChange={(e) => onChange({ shadows: e.target.checked })}
+          />
+          Enable Shadows
+        </label>
+      </div>
+
+      <div className="setting-item">
+        <label>
+          <input
+            type="checkbox"
+            checked={settings.particles}
+            onChange={(e) => onChange({ particles: e.target.checked })}
+          />
+          Enable Particles
+        </label>
+      </div>
+
+      <div className="setting-item">
+        <label>
+          <input
+            type="checkbox"
+            checked={settings.antialiasing}
+            onChange={(e) => onChange({ antialiasing: e.target.checked })}
+          />
+          Antialiasing
+        </label>
+      </div>
+    </div>
+  );
+}
+
+// Controls Settings Component
+function ControlsSettings({ settings, onChange }) {
+  return (
+    <div className="settings-section">
+      <div className="setting-item">
+        <label>Mouse Sensitivity</label>
+        <input
+          type="range"
+          min="0.1"
+          max="2"
+          step="0.1"
+          value={settings.mouseSensitivity}
+          onChange={(e) => onChange({ mouseSensitivity: parseFloat(e.target.value) })}
+        />
+        <span>{settings.mouseSensitivity.toFixed(1)}</span>
+      </div>
+
+      <div className="setting-item">
+        <label>
+          <input
+            type="checkbox"
+            checked={settings.invertY}
+            onChange={(e) => onChange({ invertY: e.target.checked })}
+          />
+          Invert Y Axis
+        </label>
+      </div>
+    </div>
+  );
+}
+
+// Gameplay Settings Component
+function GameplaySettings({ settings, onChange }) {
+  return (
+    <div className="settings-section">
+      <div className="setting-item">
+        <label>
+          <input
+            type="checkbox"
+            checked={settings.autoSave}
+            onChange={(e) => onChange({ autoSave: e.target.checked })}
+          />
+          Auto Save
+        </label>
+      </div>
+
+      <div className="setting-item">
+        <label>
+          <input
+            type="checkbox"
+            checked={settings.showHints}
+            onChange={(e) => onChange({ showHints: e.target.checked })}
+          />
+          Show Hints
+        </label>
+      </div>
+
+      <div className="setting-item">
+        <label>
+          <input
+            type="checkbox"
+            checked={settings.showMinimap}
+            onChange={(e) => onChange({ showMinimap: e.target.checked })}
+          />
+          Show Minimap
+        </label>
+      </div>
+    </div>
+  );
+}
+
+// ========================================
+// 🎒 INVENTARIO
+// ========================================
+
+function Inventory() {
+  const { player, toggleUI } = useGameContext();
+
+  const handleClose = useCallback(() => {
+    toggleUI('showInventory', false);
+  }, [toggleUI]);
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal card">
+        <div className="card-header">
+          <h2 className="card-title">Inventory</h2>
+          <button className="btn btn-sm" onClick={handleClose}>✕</button>
         </div>
-      )}
+
+        <div className="inventory-content">
+          <div className="inventory-stats">
+            <div>Coins: {player.coins}</div>
+            <div>Level: {player.level}</div>
+            <div>Experience: {player.experience}</div>
+          </div>
+
+          <div className="inventory-items">
+            {player.powerUps.map((item, index) => (
+              <div key={index} className="inventory-item">
+                <div className="item-icon">{item.icon}</div>
+                <div className="item-name">{item.name}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

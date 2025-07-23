@@ -1,169 +1,298 @@
 /* ============================================================================ */
 /* 🎮 CRASH WORM 3D - UTILIDADES DEL JUEGO */
 /* ============================================================================ */
+/* Ubicación: src/utils/gameUtils.js */
 
 import * as THREE from 'three';
-import { gameConfig } from '@/data/gameConfig';
+import { gameConfig } from '../data/gameConfig';
 
 // ========================================
 // 🧮 UTILIDADES MATEMÁTICAS
 // ========================================
 
 export const MathUtils = {
-  // Interpolación lineal
-  lerp(a, b, t) {
-    return a + (b - a) * t;
-  },
+  // Clamp value between min and max
+  clamp: (value, min, max) => Math.max(min, Math.min(max, value)),
 
-  // Interpolación suavizada
-  smoothstep(edge0, edge1, x) {
-    const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  // Linear interpolation
+  lerp: (a, b, t) => a + (b - a) * t,
+
+  // Smooth interpolation
+  smoothstep: (min, max, value) => {
+    const t = MathUtils.clamp((value - min) / (max - min), 0, 1);
     return t * t * (3 - 2 * t);
   },
 
-  // Clamp value between min and max
-  clamp(value, min, max) {
-    return Math.max(min, Math.min(max, value));
-  },
-
-  // Remap value from one range to another
-  remap(value, oldMin, oldMax, newMin, newMax) {
-    return newMin + (value - oldMin) * (newMax - newMin) / (oldMax - oldMin);
-  },
-
-  // Random between min and max
-  random(min = 0, max = 1) {
-    return min + Math.random() * (max - min);
-  },
-
-  // Random integer between min and max (inclusive)
-  randomInt(min, max) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-  },
-
-  // Random boolean with probability
-  randomBool(probability = 0.5) {
-    return Math.random() < probability;
-  },
-
   // Distance between two points
-  distance(a, b) {
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const dz = (b.z || 0) - (a.z || 0);
+  distance: (a, b) => {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    const dz = (a.z || 0) - (b.z || 0);
     return Math.sqrt(dx * dx + dy * dy + dz * dz);
   },
 
-  // Distance squared (faster when you don't need exact distance)
-  distanceSquared(a, b) {
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const dz = (b.z || 0) - (a.z || 0);
+  // Distance squared (faster for comparison)
+  distanceSquared: (a, b) => {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    const dz = (a.z || 0) - (b.z || 0);
     return dx * dx + dy * dy + dz * dz;
   },
 
-  // Normalize angle to 0-2π
-  normalizeAngle(angle) {
-    while (angle < 0) angle += Math.PI * 2;
-    while (angle >= Math.PI * 2) angle -= Math.PI * 2;
+  // Random float between min and max
+  randomFloat: (min, max) => Math.random() * (max - min) + min,
+
+  // Random integer between min and max (inclusive)
+  randomInt: (min, max) => Math.floor(Math.random() * (max - min + 1)) + min,
+
+  // Random element from array
+  randomElement: (array) => array[Math.floor(Math.random() * array.length)],
+
+  // Map value from one range to another
+  map: (value, inMin, inMax, outMin, outMax) => {
+    return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
+  },
+
+  // Angle between two points
+  angleTo: (from, to) => Math.atan2(to.y - from.y, to.x - from.x),
+
+  // Normalize angle to -PI to PI
+  normalizeAngle: (angle) => {
+    while (angle > Math.PI) angle -= 2 * Math.PI;
+    while (angle < -Math.PI) angle += 2 * Math.PI;
     return angle;
   },
 
-  // Shortest angle difference
-  angleDifference(a, b) {
-    const diff = this.normalizeAngle(b - a);
-    return diff > Math.PI ? diff - Math.PI * 2 : diff;
-  },
+  // Degrees to radians
+  toRadians: (degrees) => degrees * (Math.PI / 180),
 
-  // Check if point is inside AABB
-  pointInAABB(point, aabb) {
-    return point.x >= aabb.min.x && point.x <= aabb.max.x &&
-           point.y >= aabb.min.y && point.y <= aabb.max.y &&
-           (point.z === undefined || (point.z >= aabb.min.z && point.z <= aabb.max.z));
-  },
-
-  // Easing functions
-  easeInQuad(t) { return t * t; },
-  easeOutQuad(t) { return t * (2 - t); },
-  easeInOutQuad(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; },
-  easeInCubic(t) { return t * t * t; },
-  easeOutCubic(t) { return (--t) * t * t + 1; },
-  easeInOutCubic(t) { return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1; }
+  // Radians to degrees
+  toDegrees: (radians) => radians * (180 / Math.PI)
 };
 
 // ========================================
-// 🎮 UTILIDADES DE GAME OBJECTS
+// 🎯 UTILIDADES DE VECTORES
 // ========================================
 
-export const GameObjectUtils = {
-  // Create basic game object structure
-  createGameObject(name, position = { x: 0, y: 0, z: 0 }) {
-    return {
-      id: generateUUID(),
-      name,
-      active: true,
-      transform: {
-        position: { ...position },
-        rotation: { x: 0, y: 0, z: 0 },
-        scale: { x: 1, y: 1, z: 1 }
-      },
-      components: new Map(),
-      children: [],
-      parent: null
-    };
+export const VectorUtils = {
+  // Create a new vector
+  create: (x = 0, y = 0, z = 0) => ({ x, y, z }),
+
+  // Clone a vector
+  clone: (v) => ({ x: v.x, y: v.y, z: v.z || 0 }),
+
+  // Add two vectors
+  add: (a, b) => ({
+    x: a.x + b.x,
+    y: a.y + b.y,
+    z: (a.z || 0) + (b.z || 0)
+  }),
+
+  // Subtract two vectors
+  subtract: (a, b) => ({
+    x: a.x - b.x,
+    y: a.y - b.y,
+    z: (a.z || 0) - (b.z || 0)
+  }),
+
+  // Multiply vector by scalar
+  multiply: (v, scalar) => ({
+    x: v.x * scalar,
+    y: v.y * scalar,
+    z: (v.z || 0) * scalar
+  }),
+
+  // Divide vector by scalar
+  divide: (v, scalar) => ({
+    x: v.x / scalar,
+    y: v.y / scalar,
+    z: (v.z || 0) / scalar
+  }),
+
+  // Dot product
+  dot: (a, b) => a.x * b.x + a.y * b.y + (a.z || 0) * (b.z || 0),
+
+  // Cross product (3D only)
+  cross: (a, b) => ({
+    x: (a.y * (b.z || 0)) - ((a.z || 0) * b.y),
+    y: ((a.z || 0) * b.x) - (a.x * (b.z || 0)),
+    z: (a.x * b.y) - (a.y * b.x)
+  }),
+
+  // Vector magnitude
+  magnitude: (v) => Math.sqrt(v.x * v.x + v.y * v.y + (v.z || 0) * (v.z || 0)),
+
+  // Vector magnitude squared
+  magnitudeSquared: (v) => v.x * v.x + v.y * v.y + (v.z || 0) * (v.z || 0),
+
+  // Normalize vector
+  normalize: (v) => {
+    const mag = VectorUtils.magnitude(v);
+    return mag === 0 ? VectorUtils.create() : VectorUtils.divide(v, mag);
   },
 
-  // Add child to parent
-  addChild(parent, child) {
-    if (child.parent) {
-      this.removeChild(child.parent, child);
-    }
+  // Set vector magnitude
+  setMagnitude: (v, length) => VectorUtils.multiply(VectorUtils.normalize(v), length),
 
-    parent.children.push(child);
-    child.parent = parent;
+  // Limit vector magnitude
+  limit: (v, maxLength) => {
+    const mag = VectorUtils.magnitude(v);
+    return mag > maxLength ? VectorUtils.setMagnitude(v, maxLength) : v;
   },
 
-  // Remove child from parent
-  removeChild(parent, child) {
-    const index = parent.children.indexOf(child);
-    if (index > -1) {
-      parent.children.splice(index, 1);
-      child.parent = null;
-    }
+  // Linear interpolation between vectors
+  lerp: (a, b, t) => ({
+    x: MathUtils.lerp(a.x, b.x, t),
+    y: MathUtils.lerp(a.y, b.y, t),
+    z: MathUtils.lerp(a.z || 0, b.z || 0, t)
+  }),
+
+  // Angle of vector (2D)
+  angle: (v) => Math.atan2(v.y, v.x),
+
+  // Rotate vector (2D)
+  rotate: (v, angle) => ({
+    x: v.x * Math.cos(angle) - v.y * Math.sin(angle),
+    y: v.x * Math.sin(angle) + v.y * Math.cos(angle),
+    z: v.z || 0
+  })
+};
+
+// ========================================
+// 🎯 UTILIDADES DE COLISIONES
+// ========================================
+
+export const CollisionUtils = {
+  // Point in rectangle
+  pointInRect: (point, rect) => {
+    return point.x >= rect.x && point.x <= rect.x + rect.width &&
+           point.y >= rect.y && point.y <= rect.y + rect.height;
   },
 
-  // Get world position
-  getWorldPosition(gameObject) {
-    if (!gameObject.parent) {
-      return { ...gameObject.transform.position };
-    }
-
-    const parentWorld = this.getWorldPosition(gameObject.parent);
-    return {
-      x: parentWorld.x + gameObject.transform.position.x,
-      y: parentWorld.y + gameObject.transform.position.y,
-      z: parentWorld.z + gameObject.transform.position.z
-    };
+  // Point in circle
+  pointInCircle: (point, circle) => {
+    const distance = MathUtils.distance(point, circle);
+    return distance <= circle.radius;
   },
 
-  // Find child by name
-  findChild(parent, name) {
-    for (const child of parent.children) {
-      if (child.name === name) return child;
+  // Rectangle intersection
+  rectIntersect: (rect1, rect2) => {
+    return rect1.x < rect2.x + rect2.width &&
+           rect1.x + rect1.width > rect2.x &&
+           rect1.y < rect2.y + rect2.height &&
+           rect1.y + rect1.height > rect2.y;
+  },
 
-      const found = this.findChild(child, name);
-      if (found) return found;
+  // Circle intersection
+  circleIntersect: (circle1, circle2) => {
+    const distance = MathUtils.distance(circle1, circle2);
+    return distance <= circle1.radius + circle2.radius;
+  },
+
+  // Rectangle-circle intersection
+  rectCircleIntersect: (rect, circle) => {
+    const closestX = MathUtils.clamp(circle.x, rect.x, rect.x + rect.width);
+    const closestY = MathUtils.clamp(circle.y, rect.y, rect.y + rect.height);
+
+    const distance = MathUtils.distance(circle, { x: closestX, y: closestY });
+    return distance <= circle.radius;
+  },
+
+  // Line intersection
+  lineIntersect: (line1, line2) => {
+    const { x1, y1, x2, y2 } = line1;
+    const { x1: x3, y1: y3, x2: x4, y2: y4 } = line2;
+
+    const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+    if (denom === 0) return null; // Parallel lines
+
+    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+    const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
+
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+      return {
+        x: x1 + t * (x2 - x1),
+        y: y1 + t * (y2 - y1)
+      };
     }
+
     return null;
   },
 
-  // Get all children recursively
-  getAllChildren(parent) {
-    const children = [...parent.children];
-    for (const child of parent.children) {
-      children.push(...this.getAllChildren(child));
-    }
-    return children;
+  // Ray-sphere intersection
+  raySphereIntersect: (rayOrigin, rayDirection, sphereCenter, sphereRadius) => {
+    const oc = VectorUtils.subtract(rayOrigin, sphereCenter);
+    const a = VectorUtils.dot(rayDirection, rayDirection);
+    const b = 2.0 * VectorUtils.dot(oc, rayDirection);
+    const c = VectorUtils.dot(oc, oc) - sphereRadius * sphereRadius;
+    const discriminant = b * b - 4 * a * c;
+
+    if (discriminant < 0) return null;
+
+    const t1 = (-b - Math.sqrt(discriminant)) / (2 * a);
+    const t2 = (-b + Math.sqrt(discriminant)) / (2 * a);
+
+    return { t1, t2 };
+  }
+};
+
+// ========================================
+// ⏱️ UTILIDADES DE TIEMPO
+// ========================================
+
+export const TimeUtils = {
+  // Convert milliseconds to seconds
+  msToSeconds: (ms) => ms / 1000,
+
+  // Convert seconds to milliseconds
+  secondsToMs: (seconds) => seconds * 1000,
+
+  // Format time as MM:SS
+  formatTime: (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  },
+
+  // Format time as HH:MM:SS
+  formatTimeHours: (seconds) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  },
+
+  // Debounce function
+  debounce: (func, wait) => {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  },
+
+  // Throttle function
+  throttle: (func, limit) => {
+    let lastFunc;
+    let lastRan;
+    return function(...args) {
+      if (!lastRan) {
+        func.apply(this, args);
+        lastRan = Date.now();
+      } else {
+        clearTimeout(lastFunc);
+        lastFunc = setTimeout(() => {
+          if ((Date.now() - lastRan) >= limit) {
+            func.apply(this, args);
+            lastRan = Date.now();
+          }
+        }, limit - (Date.now() - lastRan));
+      }
+    };
   }
 };
 
@@ -172,8 +301,8 @@ export const GameObjectUtils = {
 // ========================================
 
 export const ColorUtils = {
-  // Convert hex to RGB
-  hexToRgb(hex) {
+  // Hex to RGB
+  hexToRgb: (hex) => {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result ? {
       r: parseInt(result[1], 16),
@@ -182,13 +311,13 @@ export const ColorUtils = {
     } : null;
   },
 
-  // Convert RGB to hex
-  rgbToHex(r, g, b) {
+  // RGB to hex
+  rgbToHex: (r, g, b) => {
     return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
   },
 
-  // Convert HSL to RGB
-  hslToRgb(h, s, l) {
+  // HSL to RGB
+  hslToRgb: (h, s, l) => {
     const c = (1 - Math.abs(2 * l - 1)) * s;
     const x = c * (1 - Math.abs((h / 60) % 2 - 1));
     const m = l - c / 2;
@@ -196,17 +325,17 @@ export const ColorUtils = {
     let r, g, b;
 
     if (0 <= h && h < 60) {
-      [r, g, b] = [c, x, 0];
+      r = c; g = x; b = 0;
     } else if (60 <= h && h < 120) {
-      [r, g, b] = [x, c, 0];
+      r = x; g = c; b = 0;
     } else if (120 <= h && h < 180) {
-      [r, g, b] = [0, c, x];
+      r = 0; g = c; b = x;
     } else if (180 <= h && h < 240) {
-      [r, g, b] = [0, x, c];
+      r = 0; g = x; b = c;
     } else if (240 <= h && h < 300) {
-      [r, g, b] = [x, 0, c];
+      r = x; g = 0; b = c;
     } else if (300 <= h && h < 360) {
-      [r, g, b] = [c, 0, x];
+      r = c; g = 0; b = x;
     }
 
     return {
@@ -216,10 +345,10 @@ export const ColorUtils = {
     };
   },
 
-  // Interpolate between two colors
-  lerpColor(color1, color2, t) {
-    const rgb1 = this.hexToRgb(color1);
-    const rgb2 = this.hexToRgb(color2);
+  // Interpolate between colors
+  lerpColor: (color1, color2, t) => {
+    const rgb1 = ColorUtils.hexToRgb(color1);
+    const rgb2 = ColorUtils.hexToRgb(color2);
 
     if (!rgb1 || !rgb2) return color1;
 
@@ -227,420 +356,384 @@ export const ColorUtils = {
     const g = Math.round(MathUtils.lerp(rgb1.g, rgb2.g, t));
     const b = Math.round(MathUtils.lerp(rgb1.b, rgb2.b, t));
 
-    return this.rgbToHex(r, g, b);
+    return ColorUtils.rgbToHex(r, g, b);
   },
 
-  // Get random color
-  randomColor() {
-    return this.rgbToHex(
-      MathUtils.randomInt(0, 255),
-      MathUtils.randomInt(0, 255),
-      MathUtils.randomInt(0, 255)
-    );
-  },
-
-  // Get color brightness (0-1)
-  getBrightness(color) {
-    const rgb = this.hexToRgb(color);
-    if (!rgb) return 0;
-    return (rgb.r * 0.299 + rgb.g * 0.587 + rgb.b * 0.114) / 255;
+  // Random color
+  randomColor: () => {
+    return "#" + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
   }
 };
 
 // ========================================
-// ⏱️ UTILIDADES DE TIEMPO
+// 📱 UTILIDADES DE DISPOSITIVO
 // ========================================
 
-export const TimeUtils = {
-  // Format time as MM:SS
-  formatTime(seconds) {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  },
+export const DeviceUtils = {
+  // Check if mobile device
+  isMobile: () => /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
 
-  // Format time as HH:MM:SS
-  formatTimeDetailed(seconds) {
-    const hours = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
+  // Check if tablet
+  isTablet: () => /iPad|Android/i.test(navigator.userAgent) && window.innerWidth >= 768,
 
-    if (hours > 0) {
-      return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  // Check if desktop
+  isDesktop: () => !DeviceUtils.isMobile() && !DeviceUtils.isTablet(),
+
+  // Check if touch device
+  isTouchDevice: () => 'ontouchstart' in window || navigator.maxTouchPoints > 0,
+
+  // Get device pixel ratio
+  getPixelRatio: () => window.devicePixelRatio || 1,
+
+  // Get viewport size
+  getViewportSize: () => ({
+    width: window.innerWidth,
+    height: window.innerHeight
+  }),
+
+  // Check if in fullscreen
+  isFullscreen: () => !!(document.fullscreenElement || document.webkitFullscreenElement),
+
+  // Request fullscreen
+  requestFullscreen: (element = document.documentElement) => {
+    if (element.requestFullscreen) {
+      return element.requestFullscreen();
+    } else if (element.webkitRequestFullscreen) {
+      return element.webkitRequestFullscreen();
+    } else if (element.msRequestFullscreen) {
+      return element.msRequestFullscreen();
     }
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return Promise.reject('Fullscreen not supported');
   },
 
-  // Get current timestamp
-  now() {
-    return Date.now();
-  },
-
-  // Get elapsed time in seconds
-  getElapsed(startTime) {
-    return (Date.now() - startTime) / 1000;
-  },
-
-  // Create a timer
-  createTimer(duration, onComplete, onTick) {
-    const startTime = Date.now();
-    const timer = {
-      startTime,
-      duration: duration * 1000,
-      onComplete,
-      onTick,
-      isRunning: true,
-      isPaused: false,
-      pauseTime: 0,
-      totalPauseTime: 0
-    };
-
-    const update = () => {
-      if (!timer.isRunning) return;
-
-      if (timer.isPaused) {
-        requestAnimationFrame(update);
-        return;
-      }
-
-      const elapsed = Date.now() - timer.startTime - timer.totalPauseTime;
-      const remaining = Math.max(0, timer.duration - elapsed);
-      const progress = 1 - (remaining / timer.duration);
-
-      if (timer.onTick) {
-        timer.onTick(remaining / 1000, progress);
-      }
-
-      if (remaining <= 0) {
-        timer.isRunning = false;
-        if (timer.onComplete) {
-          timer.onComplete();
-        }
-      } else {
-        requestAnimationFrame(update);
-      }
-    };
-
-    timer.pause = () => {
-      if (!timer.isPaused) {
-        timer.isPaused = true;
-        timer.pauseTime = Date.now();
-      }
-    };
-
-    timer.resume = () => {
-      if (timer.isPaused) {
-        timer.totalPauseTime += Date.now() - timer.pauseTime;
-        timer.isPaused = false;
-      }
-    };
-
-    timer.stop = () => {
-      timer.isRunning = false;
-    };
-
-    requestAnimationFrame(update);
-    return timer;
+  // Exit fullscreen
+  exitFullscreen: () => {
+    if (document.exitFullscreen) {
+      return document.exitFullscreen();
+    } else if (document.webkitExitFullscreen) {
+      return document.webkitExitFullscreen();
+    } else if (document.msExitFullscreen) {
+      return document.msExitFullscreen();
+    }
+    return Promise.reject('Exit fullscreen not supported');
   }
 };
 
 // ========================================
-// 🎲 UTILIDADES DE COLISIONES
+// 💾 UTILIDADES DE ALMACENAMIENTO
 // ========================================
 
-export const CollisionUtils = {
-  // AABB vs AABB collision
-  aabbVsAabb(a, b) {
-    return a.min.x <= b.max.x &&
-           a.max.x >= b.min.x &&
-           a.min.y <= b.max.y &&
-           a.max.y >= b.min.y &&
-           a.min.z <= b.max.z &&
-           a.max.z >= b.min.z;
-  },
-
-  // Point vs AABB collision
-  pointVsAabb(point, aabb) {
-    return point.x >= aabb.min.x && point.x <= aabb.max.x &&
-           point.y >= aabb.min.y && point.y <= aabb.max.y &&
-           point.z >= aabb.min.z && point.z <= aabb.max.z;
-  },
-
-  // Sphere vs Sphere collision
-  sphereVsSphere(a, b) {
-    const distance = MathUtils.distance(a.center, b.center);
-    return distance <= (a.radius + b.radius);
-  },
-
-  // Point vs Sphere collision
-  pointVsSphere(point, sphere) {
-    const distance = MathUtils.distance(point, sphere.center);
-    return distance <= sphere.radius;
-  },
-
-  // Ray vs AABB intersection
-  rayVsAabb(origin, direction, aabb) {
-    const invDir = {
-      x: 1 / direction.x,
-      y: 1 / direction.y,
-      z: 1 / direction.z
-    };
-
-    const t1 = (aabb.min.x - origin.x) * invDir.x;
-    const t2 = (aabb.max.x - origin.x) * invDir.x;
-    const t3 = (aabb.min.y - origin.y) * invDir.y;
-    const t4 = (aabb.max.y - origin.y) * invDir.y;
-    const t5 = (aabb.min.z - origin.z) * invDir.z;
-    const t6 = (aabb.max.z - origin.z) * invDir.z;
-
-    const tmin = Math.max(Math.max(Math.min(t1, t2), Math.min(t3, t4)), Math.min(t5, t6));
-    const tmax = Math.min(Math.min(Math.max(t1, t2), Math.max(t3, t4)), Math.max(t5, t6));
-
-    if (tmax < 0 || tmin > tmax) {
-      return null;
+export const StorageUtils = {
+  // Local storage with JSON support
+  setItem: (key, value) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (error) {
+      console.error('Failed to save to localStorage:', error);
+      return false;
     }
-
-    const t = tmin > 0 ? tmin : tmax;
-    return {
-      point: {
-        x: origin.x + direction.x * t,
-        y: origin.y + direction.y * t,
-        z: origin.z + direction.z * t
-      },
-      distance: t,
-      normal: this.getAABBNormal(origin, direction, aabb, t)
-    };
   },
 
-  // Get normal from AABB intersection
-  getAABBNormal(origin, direction, aabb, t) {
-    const point = {
-      x: origin.x + direction.x * t,
-      y: origin.y + direction.y * t,
-      z: origin.z + direction.z * t
-    };
+  getItem: (key, defaultValue = null) => {
+    try {
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : defaultValue;
+    } catch (error) {
+      console.error('Failed to read from localStorage:', error);
+      return defaultValue;
+    }
+  },
 
-    const center = {
-      x: (aabb.min.x + aabb.max.x) / 2,
-      y: (aabb.min.y + aabb.max.y) / 2,
-      z: (aabb.min.z + aabb.max.z) / 2
-    };
+  removeItem: (key) => {
+    try {
+      localStorage.removeItem(key);
+      return true;
+    } catch (error) {
+      console.error('Failed to remove from localStorage:', error);
+      return false;
+    }
+  },
 
-    const size = {
-      x: aabb.max.x - aabb.min.x,
-      y: aabb.max.y - aabb.min.y,
-      z: aabb.max.z - aabb.min.z
-    };
+  clear: () => {
+    try {
+      localStorage.clear();
+      return true;
+    } catch (error) {
+      console.error('Failed to clear localStorage:', error);
+      return false;
+    }
+  },
 
-    const d = {
-      x: (point.x - center.x) / (size.x / 2),
-      y: (point.y - center.y) / (size.y / 2),
-      z: (point.z - center.z) / (size.z / 2)
-    };
-
-    const absd = {
-      x: Math.abs(d.x),
-      y: Math.abs(d.y),
-      z: Math.abs(d.z)
-    };
-
-    if (absd.x > absd.y && absd.x > absd.z) {
-      return { x: Math.sign(d.x), y: 0, z: 0 };
-    } else if (absd.y > absd.z) {
-      return { x: 0, y: Math.sign(d.y), z: 0 };
-    } else {
-      return { x: 0, y: 0, z: Math.sign(d.z) };
+  // Check if storage is available
+  isAvailable: () => {
+    try {
+      const test = '__storage_test__';
+      localStorage.setItem(test, test);
+      localStorage.removeItem(test);
+      return true;
+    } catch (error) {
+      return false;
     }
   }
 };
 
 // ========================================
-// 🎯 UTILIDADES DEL JUEGO
+// 🎮 UTILIDADES ESPECÍFICAS DEL JUEGO
 // ========================================
 
 export const GameUtils = {
-  // Calculate score based on performance
-  calculateScore(baseScore, timeBonus, healthBonus, multiplier = 1) {
-    return Math.floor((baseScore + timeBonus + healthBonus) * multiplier);
+  // Generate unique ID
+  generateId: () => Date.now().toString(36) + Math.random().toString(36).substr(2),
+
+  // Calculate score multiplier
+  calculateScoreMultiplier: (level, combo = 1) => {
+    const baseMultiplier = 1 + (level - 1) * 0.1;
+    const comboMultiplier = Math.min(combo * 0.1, 2); // Max 2x from combo
+    return Math.round((baseMultiplier + comboMultiplier) * 100) / 100;
   },
 
-  // Get difficulty multiplier
-  getDifficultyMultiplier(difficulty) {
-    const multipliers = gameConfig.levels.difficulties;
-    return multipliers[difficulty] || multipliers.normal;
+  // Calculate experience needed for next level
+  getExpForLevel: (level) => {
+    return Math.floor(100 * Math.pow(1.5, level - 1));
   },
 
-  // Calculate level stars based on performance
-  calculateStars(score, time, collectibles, requirements) {
-    let stars = 0;
-
-    // Time requirements
-    if (time <= requirements.timeRequirements[2]) stars = 3;
-    else if (time <= requirements.timeRequirements[1]) stars = 2;
-    else if (time <= requirements.timeRequirements[0]) stars = 1;
-
-    // Collectible requirements
-    const collectibleRatio = collectibles / requirements.totalCollectibles;
-    if (collectibleRatio < requirements.collectibleRequirements[0]) {
-      stars = Math.min(stars, 0);
-    } else if (collectibleRatio < requirements.collectibleRequirements[1]) {
-      stars = Math.min(stars, 1);
-    } else if (collectibleRatio < requirements.collectibleRequirements[2]) {
-      stars = Math.min(stars, 2);
+  // Get level from experience
+  getLevelFromExp: (exp) => {
+    let level = 1;
+    let totalExp = 0;
+    while (totalExp <= exp) {
+      totalExp += GameUtils.getExpForLevel(level);
+      if (totalExp <= exp) level++;
     }
-
-    return stars;
+    return level;
   },
 
-  // Format large numbers
-  formatNumber(num) {
-    if (num >= 1000000) {
-      return (num / 1000000).toFixed(1) + 'M';
-    } else if (num >= 1000) {
-      return (num / 1000).toFixed(1) + 'K';
+  // Format score with commas
+  formatScore: (score) => {
+    return score.toLocaleString();
+  },
+
+  // Calculate damage with randomness
+  calculateDamage: (baseDamage, variance = 0.2) => {
+    const min = baseDamage * (1 - variance);
+    const max = baseDamage * (1 + variance);
+    return Math.round(MathUtils.randomFloat(min, max));
+  },
+
+  // Check if position is valid (not in walls, etc.)
+  isValidPosition: (position, level) => {
+    // Implementation depends on level structure
+    // For now, just check basic bounds
+    return position.x >= -50 && position.x <= 50 &&
+           position.z >= -50 && position.z <= 50 &&
+           position.y >= 0;
+  },
+
+  // Get spawn position
+  getSpawnPosition: (level) => {
+    // Return a safe spawn position
+    return { x: 0, y: 1, z: 0 };
+  },
+
+  // Create Three.js color from hex
+  createColor: (hex) => new THREE.Color(hex),
+
+  // Create Three.js vector
+  createVector3: (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z),
+
+  // Dispose Three.js objects
+  disposeObject: (object) => {
+    if (object.geometry) object.geometry.dispose();
+    if (object.material) {
+      if (Array.isArray(object.material)) {
+        object.material.forEach(material => material.dispose());
+      } else {
+        object.material.dispose();
+      }
     }
-    return num.toLocaleString();
+    if (object.texture) object.texture.dispose();
   },
 
-  // Validate save data
-  validateSaveData(data) {
-    if (!data || typeof data !== 'object') return false;
-
-    const required = ['score', 'level', 'health', 'saveData'];
-    return required.every(key => key in data);
-  },
-
-  // Compress save data
-  compressSaveData(data) {
-    try {
-      return LZString.compress(JSON.stringify(data));
-    } catch (error) {
-      console.warn('Failed to compress save data:', error);
-      return JSON.stringify(data);
-    }
-  },
-
-  // Decompress save data
-  decompressSaveData(compressedData) {
-    try {
-      const decompressed = LZString.decompress(compressedData);
-      return decompressed ? JSON.parse(decompressed) : JSON.parse(compressedData);
-    } catch (error) {
-      console.warn('Failed to decompress save data:', error);
-      return null;
+  // Clean up Three.js scene
+  cleanupScene: (scene) => {
+    while (scene.children.length > 0) {
+      const child = scene.children[0];
+      scene.remove(child);
+      GameUtils.disposeObject(child);
     }
   }
 };
 
 // ========================================
-// 🔧 UTILIDADES GENERALES
+// 🔒 UTILIDADES DE VALIDACIÓN
 // ========================================
 
-// Generate UUID
-export function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
+export const ValidationUtils = {
+  // Validate email
+  isValidEmail: (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  },
 
-// Debounce function
-export function debounce(func, wait, immediate = false) {
-  let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      timeout = null;
-      if (!immediate) func(...args);
+  // Validate username
+  isValidUsername: (username) => {
+    const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
+    return usernameRegex.test(username);
+  },
+
+  // Sanitize input
+  sanitizeInput: (input) => {
+    return input.replace(/[<>\"'&]/g, (char) => {
+      const entities = {
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#x27;',
+        '&': '&amp;'
+      };
+      return entities[char];
+    });
+  },
+
+  // Validate number range
+  isInRange: (value, min, max) => {
+    return typeof value === 'number' && value >= min && value <= max;
+  },
+
+  // Validate position data
+  isValidPosition: (position) => {
+    return position &&
+           typeof position.x === 'number' &&
+           typeof position.y === 'number' &&
+           typeof position.z === 'number' &&
+           !isNaN(position.x) &&
+           !isNaN(position.y) &&
+           !isNaN(position.z);
+  }
+};
+
+// ========================================
+// 📊 UTILIDADES DE PERFORMANCE
+// ========================================
+
+export const PerformanceUtils = {
+  // Measure execution time
+  measureTime: (fn, name = 'Operation') => {
+    return (...args) => {
+      const start = performance.now();
+      const result = fn(...args);
+      const end = performance.now();
+      console.log(`${name} took ${end - start} milliseconds`);
+      return result;
     };
-    const callNow = immediate && !timeout;
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-    if (callNow) func(...args);
-  };
-}
+  },
 
-// Throttle function
-export function throttle(func, limit) {
-  let inThrottle;
-  return function(...args) {
-    if (!inThrottle) {
-      func.apply(this, args);
-      inThrottle = true;
-      setTimeout(() => inThrottle = false, limit);
+  // Object pooling helper
+  createPool: (createFn, resetFn, initialSize = 10) => {
+    const pool = [];
+
+    // Pre-populate pool
+    for (let i = 0; i < initialSize; i++) {
+      pool.push(createFn());
     }
-  };
-}
 
-// Deep clone object
-export function deepClone(obj) {
-  if (obj === null || typeof obj !== 'object') return obj;
-  if (obj instanceof Date) return new Date(obj.getTime());
-  if (obj instanceof Array) return obj.map(item => deepClone(item));
-  if (typeof obj === 'object') {
-    const clonedObj = {};
-    for (const key in obj) {
-      if (obj.hasOwnProperty(key)) {
-        clonedObj[key] = deepClone(obj[key]);
+    return {
+      get: () => {
+        if (pool.length > 0) {
+          const obj = pool.pop();
+          return resetFn ? resetFn(obj) : obj;
+        }
+        return createFn();
+      },
+
+      release: (obj) => {
+        if (resetFn) resetFn(obj);
+        pool.push(obj);
+      },
+
+      size: () => pool.length
+    };
+  },
+
+  // Frame rate limiter
+  createFrameLimiter: (targetFPS) => {
+    let lastFrame = 0;
+    const frameTime = 1000 / targetFPS;
+
+    return (callback) => {
+      const now = performance.now();
+      if (now - lastFrame >= frameTime) {
+        lastFrame = now;
+        callback();
+      }
+    };
+  }
+};
+
+// ========================================
+// 🔧 UTILIDADES DE DEBUG
+// ========================================
+
+export const DebugUtils = {
+  // Log with timestamp
+  log: (...args) => {
+    if (gameConfig.debug.enabled) {
+      console.log(`[${new Date().toISOString()}]`, ...args);
+    }
+  },
+
+  // Warn with timestamp
+  warn: (...args) => {
+    if (gameConfig.debug.enabled) {
+      console.warn(`[${new Date().toISOString()}]`, ...args);
+    }
+  },
+
+  // Error with timestamp
+  error: (...args) => {
+    console.error(`[${new Date().toISOString()}]`, ...args);
+  },
+
+  // Performance mark
+  mark: (name) => {
+    if (gameConfig.debug.enabled && performance.mark) {
+      performance.mark(name);
+    }
+  },
+
+  // Performance measure
+  measure: (name, startMark, endMark) => {
+    if (gameConfig.debug.enabled && performance.measure) {
+      performance.measure(name, startMark, endMark);
+      const measurements = performance.getEntriesByName(name);
+      if (measurements.length > 0) {
+        console.log(`${name}: ${measurements[0].duration}ms`);
       }
     }
-    return clonedObj;
+  },
+
+  // Draw bounding box
+  drawBoundingBox: (scene, object, color = 0xff0000) => {
+    if (!gameConfig.debug.showBoundingBoxes) return;
+
+    const box = new THREE.Box3().setFromObject(object);
+    const helper = new THREE.Box3Helper(box, color);
+    scene.add(helper);
+    return helper;
   }
-}
-
-// Check if value is empty
-export function isEmpty(value) {
-  if (value === null || value === undefined) return true;
-  if (typeof value === 'string') return value.trim().length === 0;
-  if (Array.isArray(value)) return value.length === 0;
-  if (typeof value === 'object') return Object.keys(value).length === 0;
-  return false;
-}
-
-// Get nested object property safely
-export function getNestedProperty(obj, path, defaultValue = undefined) {
-  const keys = path.split('.');
-  let current = obj;
-
-  for (const key of keys) {
-    if (current === null || current === undefined || !(key in current)) {
-      return defaultValue;
-    }
-    current = current[key];
-  }
-
-  return current;
-}
-
-// Set nested object property
-export function setNestedProperty(obj, path, value) {
-  const keys = path.split('.');
-  const lastKey = keys.pop();
-  let current = obj;
-
-  for (const key of keys) {
-    if (!(key in current) || typeof current[key] !== 'object') {
-      current[key] = {};
-    }
-    current = current[key];
-  }
-
-  current[lastKey] = value;
-  return obj;
-}
+};
 
 export default {
   MathUtils,
-  GameObjectUtils,
-  ColorUtils,
-  TimeUtils,
+  VectorUtils,
   CollisionUtils,
+  TimeUtils,
+  ColorUtils,
+  DeviceUtils,
+  StorageUtils,
   GameUtils,
-  generateUUID,
-  debounce,
-  throttle,
-  deepClone,
-  isEmpty,
-  getNestedProperty,
-  setNestedProperty
+  ValidationUtils,
+  PerformanceUtils,
+  DebugUtils
 };

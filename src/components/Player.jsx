@@ -1,466 +1,610 @@
 /* ============================================================================ */
 /* 🎮 CRASH WORM 3D - COMPONENTE DEL JUGADOR */
 /* ============================================================================ */
+/* Ubicación: src/components/Player.jsx */
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
+import { useKeyboardControls, useGamepadControls } from '@react-three/drei';
 import { RigidBody, CapsuleCollider } from '@react-three/rapier';
-import { useKeyboardControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { useGame } from '@/context/GameContext';
-import { gameConfig } from '@/data/gameConfig';
-import useAudioManager from '@/hooks/useAudioManager';
+import { useGameContext } from '../context/GameContext';
+import { useAudioManager } from '../hooks/useAudioManager';
+import { gameConfig } from '../data/gameConfig';
+import { MathUtils, VectorUtils, GameUtils } from '../utils/gameUtils';
 
 // ========================================
-// 🏃‍♂️ COMPONENTE PRINCIPAL DEL JUGADOR
+// 🎮 COMPONENTE PRINCIPAL DEL JUGADOR
 // ========================================
 
-export function Player({ position = [0, 2, 0], onCollision }) {
-  const playerRef = useRef();
+export function Player({ position = [0, 1, 0], onPositionChange, ...props }) {
+  // Refs para Three.js objects
   const meshRef = useRef();
-  const cameraTargetRef = useRef(new THREE.Vector3());
+  const rigidBodyRef = useRef();
+  const groupRef = useRef();
 
-  const { state, actions, utils } = useGame();
-  const { playSound } = useAudioManager();
+  // Refs para lógica del juego
+  const velocityRef = useRef(new THREE.Vector3());
+  const isGroundedRef = useRef(false);
+  const jumpTimeRef = useRef(0);
+  const lastGroundTimeRef = useRef(0);
+  const inputBufferRef = useRef({ jump: 0 });
 
-  const [isGrounded, setIsGrounded] = useState(false);
-  const [jumpCount, setJumpCount] = useState(0);
-  const [velocity, setVelocity] = useState({ x: 0, y: 0, z: 0 });
+  // State local
+  const [isMoving, setIsMoving] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
+  const [isJumping, setIsJumping] = useState(false);
   const [animationState, setAnimationState] = useState('idle');
-  const [isInvulnerable, setIsInvulnerable] = useState(false);
 
-  // Configuración del jugador
+  // Hooks del contexto
+  const { player, settings, updatePlayer, takeDamage, addScore } = useGameContext();
+  const { playSound } = useAudioManager();
+  const { camera, scene } = useThree();
+
+  // Configuración del player
   const config = gameConfig.player;
-  const controlConfig = gameConfig.controls.keyboard;
 
   // ========================================
-  // 🎮 CONTROLES DEL JUGADOR
+  // 🎯 INPUT HANDLING
   // ========================================
 
-  const [subscribeKeys, getKeys] = useKeyboardControls();
+  const [, getKeys] = useKeyboardControls();
 
-  // Configurar controles
-  useEffect(() => {
-    const unsubscribeJump = subscribeKeys(
-      (state) => state.jump,
-      (pressed) => {
-        if (pressed && (isGrounded || jumpCount < config.maxJumps)) {
-          jump();
-        }
-      }
+  const getInputVector = useCallback(() => {
+    const keys = getKeys();
+    const inputVector = new THREE.Vector3();
+
+    // Keyboard input
+    if (keys.moveForward) inputVector.z -= 1;
+    if (keys.moveBackward) inputVector.z += 1;
+    if (keys.moveLeft) inputVector.x -= 1;
+    if (keys.moveRight) inputVector.x += 1;
+
+    // Normalize diagonal movement
+    if (inputVector.length() > 0) {
+      inputVector.normalize();
+    }
+
+    return inputVector;
+  }, [getKeys]);
+
+  const handleJumpInput = useCallback(() => {
+    const keys = getKeys();
+    const now = Date.now();
+
+    if (keys.jump) {
+      inputBufferRef.current.jump = now;
+    }
+
+    // Check for jump execution
+    const jumpBufferTime = now - inputBufferRef.current.jump;
+    const coyoteTime = now - lastGroundTimeRef.current;
+
+    if (jumpBufferTime < config.movement.jumpBuffering * 1000 &&
+        (isGroundedRef.current || coyoteTime < config.movement.coyoteTime * 1000)) {
+      executeJump();
+      inputBufferRef.current.jump = 0; // Clear buffer
+    }
+  }, [getKeys, config]);
+
+  // ========================================
+  // 🏃‍♂️ MOVEMENT LOGIC
+  // ========================================
+
+  const executeJump = useCallback(() => {
+    if (!rigidBodyRef.current) return;
+
+    const now = Date.now();
+    if (now - jumpTimeRef.current < 200) return; // Prevent double jumps
+
+    jumpTimeRef.current = now;
+    setIsJumping(true);
+
+    // Apply jump force
+    const jumpForce = Math.sqrt(2 * Math.abs(config.movement.gravity) * config.movement.jumpHeight);
+    rigidBodyRef.current.setLinvel({ x: 0, y: jumpForce, z: 0 }, true);
+
+    // Play jump sound
+    playSound('jump', { volume: settings.audio.sfxVolume });
+
+    // Reset jumping state after animation
+    setTimeout(() => setIsJumping(false), 500);
+  }, [config, playSound, settings]);
+
+  const updateMovement = useCallback((delta) => {
+    if (!rigidBodyRef.current || !meshRef.current) return;
+
+    const inputVector = getInputVector();
+    const keys = getKeys();
+    const isRunningInput = keys.run;
+
+    // Update running state
+    setIsRunning(isRunningInput && inputVector.length() > 0);
+    setIsMoving(inputVector.length() > 0);
+
+    // Calculate movement speed
+    const baseSpeed = isRunningInput ? config.movement.runSpeed : config.movement.walkSpeed;
+    const currentSpeed = isGroundedRef.current ? baseSpeed : baseSpeed * config.movement.airControl;
+
+    // Apply camera-relative movement
+    const cameraDirection = new THREE.Vector3();
+    camera.getWorldDirection(cameraDirection);
+    cameraDirection.y = 0;
+    cameraDirection.normalize();
+
+    const cameraRight = new THREE.Vector3();
+    cameraRight.crossVectors(camera.up, cameraDirection).normalize();
+
+    // Calculate movement direction
+    const moveDirection = new THREE.Vector3();
+    moveDirection.addScaledVector(cameraDirection, -inputVector.z);
+    moveDirection.addScaledVector(cameraRight, inputVector.x);
+    moveDirection.normalize();
+
+    // Apply movement with acceleration/deceleration
+    const targetVelocity = moveDirection.multiplyScalar(currentSpeed);
+    const currentVelocity = rigidBodyRef.current.linvel();
+
+    const acceleration = inputVector.length() > 0 ? config.movement.acceleration : config.movement.deceleration;
+
+    const newVelocityX = MathUtils.lerp(currentVelocity.x, targetVelocity.x, acceleration * delta);
+    const newVelocityZ = MathUtils.lerp(currentVelocity.z, targetVelocity.z, acceleration * delta);
+
+    rigidBodyRef.current.setLinvel({
+      x: newVelocityX,
+      y: currentVelocity.y,
+      z: newVelocityZ
+    }, true);
+
+    // Update player rotation to face movement direction
+    if (inputVector.length() > 0) {
+      const targetRotation = Math.atan2(moveDirection.x, moveDirection.z);
+      const currentRotation = meshRef.current.rotation.y;
+      const newRotation = MathUtils.lerp(currentRotation, targetRotation, 10 * delta);
+      meshRef.current.rotation.y = newRotation;
+    }
+
+    // Handle jump input
+    handleJumpInput();
+
+  }, [getInputVector, getKeys, camera, config, handleJumpInput]);
+
+  // ========================================
+  // 🔄 COLLISION DETECTION
+  // ========================================
+
+  const checkGrounded = useCallback(() => {
+    if (!rigidBodyRef.current) return;
+
+    const position = rigidBodyRef.current.translation();
+    const velocity = rigidBodyRef.current.linvel();
+
+    // Simple ground check - could be improved with raycasting
+    const wasGrounded = isGroundedRef.current;
+    isGroundedRef.current = position.y <= 1.1 && Math.abs(velocity.y) < 0.1;
+
+    if (isGroundedRef.current && !wasGrounded) {
+      // Just landed
+      lastGroundTimeRef.current = Date.now();
+      playSound('land', { volume: settings.audio.sfxVolume * 0.5 });
+    } else if (!isGroundedRef.current && wasGrounded) {
+      // Just left ground
+      lastGroundTimeRef.current = Date.now();
+    }
+  }, [playSound, settings]);
+
+  // ========================================
+  // 🎨 ANIMATION SYSTEM
+  // ========================================
+
+  const updateAnimation = useCallback(() => {
+    let newState = 'idle';
+
+    if (isJumping || !isGroundedRef.current) {
+      newState = 'jumping';
+    } else if (isRunning) {
+      newState = 'running';
+    } else if (isMoving) {
+      newState = 'walking';
+    }
+
+    if (newState !== animationState) {
+      setAnimationState(newState);
+    }
+  }, [isJumping, isRunning, isMoving, animationState]);
+
+  // ========================================
+  // 📹 CAMERA FOLLOW
+  // ========================================
+
+  const updateCamera = useCallback((delta) => {
+    if (!meshRef.current) return;
+
+    const playerPosition = meshRef.current.position;
+    const targetPosition = new THREE.Vector3(
+      playerPosition.x + config.camera.followOffset.x,
+      playerPosition.y + config.camera.followOffset.y,
+      playerPosition.z + config.camera.followOffset.z
     );
 
-    return () => {
-      unsubscribeJump();
-    };
-  }, [isGrounded, jumpCount, subscribeKeys]);
+    // Smooth camera follow
+    camera.position.lerp(targetPosition, config.camera.followSpeed * delta);
 
-  // ========================================
-  // 🏃‍♂️ LÓGICA DE MOVIMIENTO
-  // ========================================
-
-  const jump = useCallback(() => {
-    if (!playerRef.current) return;
-
-    const impulse = { x: 0, y: config.jumpForce, z: 0 };
-    playerRef.current.applyImpulse(impulse, true);
-
-    setJumpCount(prev => prev + 1);
-    setAnimationState('jumping');
-
-    playSound('jump', { volume: 0.6, rate: 1 + Math.random() * 0.2 });
-
-    // Reset animation after jump
-    setTimeout(() => {
-      if (isGrounded) {
-        setAnimationState('idle');
-      }
-    }, 300);
-  }, [config.jumpForce, isGrounded, playSound]);
-
-  const move = useCallback((direction, deltaTime) => {
-    if (!playerRef.current) return;
-
-    const force = config.speed * deltaTime * 60; // Normalize for 60fps
-    const impulse = { x: direction * force, y: 0, z: 0 };
-
-    playerRef.current.applyImpulse(impulse, true);
-
-    // Update animation
-    if (direction !== 0 && isGrounded) {
-      setAnimationState('running');
-    } else if (isGrounded) {
-      setAnimationState('idle');
-    }
-  }, [config.speed, isGrounded]);
-
-  // ========================================
-  // 🔄 GAME LOOP
-  // ========================================
-
-  useFrame((state, deltaTime) => {
-    if (!playerRef.current || !utils.isPlaying) return;
-
-    const { forward, backward, left, right, jump } = getKeys();
-
-    // Calcular dirección de movimiento
-    let moveDirection = 0;
-    if (left) moveDirection -= 1;
-    if (right) moveDirection += 1;
-
-    // Aplicar movimiento
-    if (moveDirection !== 0) {
-      move(moveDirection, deltaTime);
-    }
-
-    // Actualizar velocidad actual
-    const currentVel = playerRef.current.linvel();
-    setVelocity({ x: currentVel.x, y: currentVel.y, z: currentVel.z });
-
-    // Limitar velocidad máxima
-    if (Math.abs(currentVel.x) > config.speed) {
-      const clampedVelX = Math.sign(currentVel.x) * config.speed;
-      playerRef.current.setLinvel({ x: clampedVelX, y: currentVel.y, z: currentVel.z }, true);
-    }
-
-    // Aplicar fricción cuando no hay input
-    if (moveDirection === 0 && isGrounded) {
-      const friction = config.friction;
-      playerRef.current.setLinvel({
-        x: currentVel.x * friction,
-        y: currentVel.y,
-        z: currentVel.z * friction
-      }, true);
-    }
-
-    // Rotar el mesh basado en la dirección
-    if (meshRef.current && moveDirection !== 0) {
-      const targetRotation = moveDirection > 0 ? 0 : Math.PI;
-      meshRef.current.rotation.y = THREE.MathUtils.lerp(
-        meshRef.current.rotation.y,
-        targetRotation,
-        deltaTime * 10
-      );
-    }
-
-    // Actualizar posición del target de la cámara
-    const playerPosition = playerRef.current.translation();
-    cameraTargetRef.current.set(
-      playerPosition.x,
-      playerPosition.y + 2,
-      playerPosition.z + 5
+    // Look ahead based on player velocity
+    const velocity = rigidBodyRef.current?.linvel() || { x: 0, y: 0, z: 0 };
+    const lookAheadOffset = new THREE.Vector3(
+      velocity.x * config.camera.lookAhead,
+      0,
+      velocity.z * config.camera.lookAhead
     );
 
-    // Actualizar estado del juego con la posición del jugador
-    actions.updateTime(state.clock.elapsedTime);
+    const lookAtTarget = playerPosition.clone().add(lookAheadOffset);
+    camera.lookAt(lookAtTarget);
+
+  }, [camera, config]);
+
+  // ========================================
+  // 🔄 FRAME UPDATE
+  // ========================================
+
+  useFrame((state, delta) => {
+    checkGrounded();
+    updateMovement(delta);
+    updateAnimation();
+    updateCamera(delta);
+
+    // Update position in context
+    if (meshRef.current && onPositionChange) {
+      const pos = meshRef.current.position;
+      onPositionChange({ x: pos.x, y: pos.y, z: pos.z });
+    }
   });
 
   // ========================================
-  // 💥 MANEJO DE COLISIONES
+  // 💥 COLLISION EVENTS
   // ========================================
 
   const handleCollisionEnter = useCallback((event) => {
     const { other } = event;
 
-    // Detectar suelo
-    if (other.rigidBodyObject?.userData?.type === 'ground' ||
-        other.rigidBodyObject?.userData?.type === 'platform') {
-      setIsGrounded(true);
-      setJumpCount(0);
+    // Check collision with different object types
+    if (other.rigidBodyObject?.userData?.type) {
+      const objectType = other.rigidBodyObject.userData.type;
 
-      if (animationState === 'jumping') {
-        setAnimationState('idle');
+      switch (objectType) {
+        case 'collectible':
+          handleCollectibleCollision(other.rigidBodyObject.userData);
+          break;
+        case 'enemy':
+          handleEnemyCollision(other.rigidBodyObject.userData);
+          break;
+        case 'powerup':
+          handlePowerUpCollision(other.rigidBodyObject.userData);
+          break;
+        case 'hazard':
+          handleHazardCollision(other.rigidBodyObject.userData);
+          break;
+        default:
+          break;
       }
-    }
-
-    // Detectar coleccionables
-    if (other.rigidBodyObject?.userData?.type === 'collectible') {
-      const collectibleData = other.rigidBodyObject.userData;
-
-      actions.updateScore(collectibleData.points || 10);
-      actions.addCollectible();
-
-      playSound('collect', { volume: 0.7 });
-
-      if (onCollision) {
-        onCollision('collectible', collectibleData);
-      }
-    }
-
-    // Detectar enemigos
-    if (other.rigidBodyObject?.userData?.type === 'enemy') {
-      if (!isInvulnerable) {
-        takeDamage(other.rigidBodyObject.userData.damage || 10);
-      }
-    }
-
-    // Detectar power-ups
-    if (other.rigidBodyObject?.userData?.type === 'powerup') {
-      const powerupData = other.rigidBodyObject.userData;
-      applyPowerup(powerupData);
-
-      if (onCollision) {
-        onCollision('powerup', powerupData);
-      }
-    }
-
-    // Detectar límites del mundo
-    if (other.rigidBodyObject?.userData?.type === 'worldBounds') {
-      // Respawn del jugador
-      respawnPlayer();
-    }
-
-  }, [animationState, isInvulnerable, actions, playSound, onCollision]);
-
-  const handleCollisionExit = useCallback((event) => {
-    const { other } = event;
-
-    // Salir del suelo
-    if (other.rigidBodyObject?.userData?.type === 'ground' ||
-        other.rigidBodyObject?.userData?.type === 'platform') {
-
-      // Delay para evitar false positives
-      setTimeout(() => {
-        if (playerRef.current) {
-          const vel = playerRef.current.linvel();
-          if (vel.y < -0.1) { // Cayendo
-            setIsGrounded(false);
-            setAnimationState('falling');
-          }
-        }
-      }, 50);
     }
   }, []);
 
-  // ========================================
-  // 💔 SISTEMA DE VIDA
-  // ========================================
+  const handleCollectibleCollision = useCallback((collectibleData) => {
+    playSound('collect', { volume: settings.audio.sfxVolume });
+    addScore(collectibleData.value || 10);
 
-  const takeDamage = useCallback((damage) => {
-    if (isInvulnerable) return;
-
-    actions.updateHealth(-damage);
-    setIsInvulnerable(true);
-
-    playSound('damage', { volume: 0.8 });
-
-    // Aplicar knockback
-    if (playerRef.current) {
-      const knockback = { x: -velocity.x * 2, y: 5, z: 0 };
-      playerRef.current.applyImpulse(knockback, true);
+    // Remove collectible from scene
+    if (collectibleData.onCollect) {
+      collectibleData.onCollect();
     }
+  }, [playSound, settings, addScore]);
 
-    // Período de invulnerabilidad
-    setTimeout(() => {
-      setIsInvulnerable(false);
-    }, config.invulnerabilityTime);
+  const handleEnemyCollision = useCallback((enemyData) => {
+    if (player.invincible) return;
 
-    // Verificar game over
-    if (state.health <= damage) {
-      actions.updateLives(-1);
+    const damage = enemyData.damage || 10;
+    takeDamage(damage);
 
-      if (state.lives <= 1) {
-        actions.gameOver();
-      } else {
-        respawnPlayer();
-      }
+    playSound('hurt', { volume: settings.audio.sfxVolume });
+
+    // Apply knockback
+    if (rigidBodyRef.current && enemyData.position) {
+      const knockbackDirection = new THREE.Vector3()
+        .subVectors(meshRef.current.position, enemyData.position)
+        .normalize();
+
+      const knockbackForce = 5;
+      rigidBodyRef.current.applyImpulse({
+        x: knockbackDirection.x * knockbackForce,
+        y: 2,
+        z: knockbackDirection.z * knockbackForce
+      }, true);
     }
-  }, [isInvulnerable, actions, playSound, velocity, config.invulnerabilityTime, state.health, state.lives]);
+  }, [player.invincible, takeDamage, playSound, settings]);
 
-  const applyPowerup = useCallback((powerupData) => {
-    switch (powerupData.powerupType) {
-      case 'health':
-        actions.updateHealth(powerupData.amount || 25);
-        playSound('collect', { volume: 0.8, rate: 1.2 });
-        break;
+  const handlePowerUpCollision = useCallback((powerUpData) => {
+    playSound('powerup', { volume: settings.audio.sfxVolume });
 
-      case 'speed':
-        // Implementar speed boost temporal
-        playSound('collect', { volume: 0.8, rate: 1.5 });
-        break;
-
-      case 'jump':
-        // Implementar jump boost temporal
-        playSound('collect', { volume: 0.8, rate: 0.8 });
-        break;
-
-      case 'invincible':
-        setIsInvulnerable(true);
-        setTimeout(() => setIsInvulnerable(false), 5000);
-        playSound('collect', { volume: 1.0, rate: 2.0 });
-        break;
+    // Apply power-up effect
+    if (powerUpData.onCollect) {
+      powerUpData.onCollect();
     }
-  }, [actions, playSound]);
+  }, [playSound, settings]);
 
-  const respawnPlayer = useCallback(() => {
-    if (!playerRef.current) return;
+  const handleHazardCollision = useCallback((hazardData) => {
+    const damage = hazardData.damage || 25;
+    takeDamage(damage);
 
-    // Reset position
-    playerRef.current.setTranslation({ x: position[0], y: position[1], z: position[2] }, true);
-    playerRef.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
-    playerRef.current.setAngvel({ x: 0, y: 0, z: 0 }, true);
-
-    // Reset state
-    setIsGrounded(false);
-    setJumpCount(0);
-    setAnimationState('idle');
-    setIsInvulnerable(true);
-
-    // Brief invulnerability after respawn
-    setTimeout(() => {
-      setIsInvulnerable(false);
-    }, 2000);
-  }, [position]);
+    playSound('hurt', { volume: settings.audio.sfxVolume });
+  }, [takeDamage, playSound, settings]);
 
   // ========================================
-  // 🎨 RENDER DEL JUGADOR
+  // 🎨 RENDER
   // ========================================
 
   return (
-    <RigidBody
-      ref={playerRef}
-      position={position}
-      type="dynamic"
-      colliders={false}
-      mass={config.mass}
-      lockRotations
-      onCollisionEnter={handleCollisionEnter}
-      onCollisionExit={handleCollisionExit}
-      userData={{ type: 'player' }}
-    >
-      {/* Collider del jugador */}
-      <CapsuleCollider args={[config.size.height / 2 - 0.2, 0.4]} />
+    <group ref={groupRef} {...props}>
+      <RigidBody
+        ref={rigidBodyRef}
+        position={position}
+        type="dynamic"
+        colliders={false}
+        mass={config.physics.mass}
+        linearDamping={config.physics.linearDamping}
+        angularDamping={config.physics.angularDamping}
+        restitution={config.physics.restitution}
+        friction={config.physics.friction}
+        onCollisionEnter={handleCollisionEnter}
+        userData={{ type: 'player' }}
+      >
+        <CapsuleCollider args={[0.5, 0.5]} />
 
-      {/* Mesh visual del jugador */}
-      <group ref={meshRef}>
-        <mesh castShadow receiveShadow>
-          <capsuleGeometry args={[0.4, config.size.height - 0.8]} />
-          <meshStandardMaterial
-            color={isInvulnerable ? '#ff6666' : '#00ffff'}
-            transparent={isInvulnerable}
-            opacity={isInvulnerable ? 0.7 : 1.0}
-            emissive={isInvulnerable ? '#ff3333' : '#003333'}
-            emissiveIntensity={isInvulnerable ? 0.3 : 0.1}
+        <group ref={meshRef}>
+          {/* Player Model */}
+          <PlayerModel
+            animationState={animationState}
+            isGrounded={isGroundedRef.current}
+            health={player.health}
           />
-        </mesh>
 
-        {/* Ojos del jugador */}
-        <mesh position={[0, 0.3, 0.35]} castShadow>
-          <sphereGeometry args={[0.05]} />
-          <meshStandardMaterial color="#ffffff" />
-        </mesh>
-        <mesh position={[-0.1, 0.3, 0.35]} castShadow>
-          <sphereGeometry args={[0.03]} />
-          <meshStandardMaterial color="#000000" />
-        </mesh>
-        <mesh position={[0.1, 0.3, 0.35]} castShadow>
-          <sphereGeometry args={[0.03]} />
-          <meshStandardMaterial color="#000000" />
-        </mesh>
-
-        {/* Efectos visuales */}
-        {isInvulnerable && (
-          <mesh>
-            <sphereGeometry args={[0.6]} />
-            <meshBasicMaterial
-              color="#ffff00"
-              transparent
-              opacity={0.2}
-              wireframe
-            />
-          </mesh>
-        )}
-
-        {/* Indicador de velocidad */}
-        {Math.abs(velocity.x) > 1 && (
-          <group>
-            {[...Array(3)].map((_, i) => (
-              <mesh
-                key={i}
-                position={[-0.8 - i * 0.2, 0, 0]}
-                rotation={[0, 0, Math.PI / 4]}
-              >
-                <planeGeometry args={[0.1, 0.05]} />
-                <meshBasicMaterial
-                  color="#00ffff"
-                  transparent
-                  opacity={0.8 - i * 0.2}
-                />
-              </mesh>
-            ))}
-          </group>
-        )}
-      </group>
-
-      {/* Partículas de aterrizaje */}
-      {isGrounded && Math.abs(velocity.y) > 2 && (
-        <LandingParticles />
-      )}
-    </RigidBody>
-  );
-}
-
-// ========================================
-// ✨ COMPONENTE DE PARTÍCULAS DE ATERRIZAJE
-// ========================================
-
-function LandingParticles() {
-  const particles = useRef();
-  const [show, setShow] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setShow(false), 500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useFrame((state, deltaTime) => {
-    if (particles.current && show) {
-      particles.current.rotation.y += deltaTime * 2;
-    }
-  });
-
-  if (!show) return null;
-
-  return (
-    <group ref={particles} position={[0, -0.8, 0]}>
-      {[...Array(8)].map((_, i) => {
-        const angle = (i / 8) * Math.PI * 2;
-        const x = Math.cos(angle) * 0.3;
-        const z = Math.sin(angle) * 0.3;
-
-        return (
-          <mesh key={i} position={[x, 0, z]}>
-            <sphereGeometry args={[0.02]} />
-            <meshBasicMaterial
-              color="#8899aa"
-              transparent
-              opacity={0.6}
-            />
-          </mesh>
-        );
-      })}
+          {/* Player Effects */}
+          <PlayerEffects
+            isRunning={isRunning}
+            isJumping={isJumping}
+            powerUps={player.powerUps}
+          />
+        </group>
+      </RigidBody>
     </group>
   );
 }
 
 // ========================================
-// 🎮 CONTROLES DE TECLADO
+// 🎭 COMPONENTE DEL MODELO DEL JUGADOR
 // ========================================
 
-export function PlayerControls() {
+function PlayerModel({ animationState, isGrounded, health }) {
+  const meshRef = useRef();
+  const materialRef = useRef();
+
+  // Animation states
+  const animations = {
+    idle: { scale: [1, 1, 1], bobSpeed: 1, bobAmount: 0.02 },
+    walking: { scale: [1, 1.05, 1], bobSpeed: 4, bobAmount: 0.1 },
+    running: { scale: [1, 1.1, 1], bobSpeed: 8, bobAmount: 0.15 },
+    jumping: { scale: [1, 1.2, 1], bobSpeed: 0, bobAmount: 0 }
+  };
+
+  const currentAnim = animations[animationState] || animations.idle;
+
+  useFrame((state) => {
+    if (!meshRef.current || !materialRef.current) return;
+
+    const time = state.clock.elapsedTime;
+
+    // Bobbing animation
+    const bobOffset = Math.sin(time * currentAnim.bobSpeed) * currentAnim.bobAmount;
+    meshRef.current.position.y = bobOffset;
+
+    // Scale animation
+    meshRef.current.scale.set(...currentAnim.scale);
+
+    // Health-based color change
+    const healthPercent = health / 100;
+    const color = new THREE.Color();
+    if (healthPercent > 0.6) {
+      color.setHex(gameConfig.graphics.materials.playerMaterial.color);
+    } else if (healthPercent > 0.3) {
+      color.setHex(0xffaa00); // Orange
+    } else {
+      color.setHex(0xff4400); // Red
+    }
+    materialRef.current.color = color;
+
+    // Invincibility flashing
+    if (health <= 0) {
+      materialRef.current.opacity = 0.5 + 0.5 * Math.sin(time * 10);
+    } else {
+      materialRef.current.opacity = 1;
+    }
+  });
+
   return (
-    <KeyboardControls
-      map={[
-        { name: 'forward', keys: ['ArrowUp', 'KeyW'] },
-        { name: 'backward', keys: ['ArrowDown', 'KeyS'] },
-        { name: 'left', keys: ['ArrowLeft', 'KeyA'] },
-        { name: 'right', keys: ['ArrowRight', 'KeyD'] },
-        { name: 'jump', keys: ['Space'] },
-        { name: 'run', keys: ['Shift'] },
-      ]}
-    >
-      {/* Los controles se manejan dentro del componente Player */}
-    </KeyboardControls>
+    <mesh ref={meshRef} castShadow receiveShadow>
+      <capsuleGeometry args={[0.5, 1]} />
+      <meshStandardMaterial
+        ref={materialRef}
+        color={gameConfig.graphics.materials.playerMaterial.color}
+        metalness={gameConfig.graphics.materials.playerMaterial.metalness}
+        roughness={gameConfig.graphics.materials.playerMaterial.roughness}
+        emissive={gameConfig.graphics.materials.playerMaterial.emissive}
+        transparent
+      />
+    </mesh>
+  );
+}
+
+// ========================================
+// ✨ COMPONENTE DE EFECTOS DEL JUGADOR
+// ========================================
+
+function PlayerEffects({ isRunning, isJumping, powerUps }) {
+  return (
+    <>
+      {/* Running dust particles */}
+      {isRunning && (
+        <group position={[0, -0.9, 0]}>
+          <RunningDustEffect />
+        </group>
+      )}
+
+      {/* Jump trail effect */}
+      {isJumping && (
+        <JumpTrailEffect />
+      )}
+
+      {/* Power-up effects */}
+      {powerUps.map((powerUp, index) => (
+        <PowerUpEffect key={powerUp.id || index} powerUp={powerUp} />
+      ))}
+    </>
+  );
+}
+
+// ========================================
+// 💨 EFECTO DE POLVO AL CORRER
+// ========================================
+
+function RunningDustEffect() {
+  const particlesRef = useRef();
+  const particleCount = 20;
+  const positions = new Float32Array(particleCount * 3);
+  const velocities = new Float32Array(particleCount * 3);
+  const lifetimes = new Float32Array(particleCount);
+
+  useFrame((state, delta) => {
+    if (!particlesRef.current) return;
+
+    const time = state.clock.elapsedTime;
+
+    for (let i = 0; i < particleCount; i++) {
+      const i3 = i * 3;
+
+      // Update particle lifetime
+      lifetimes[i] -= delta;
+
+      if (lifetimes[i] <= 0) {
+        // Reset particle
+        positions[i3] = MathUtils.randomFloat(-0.3, 0.3);
+        positions[i3 + 1] = 0;
+        positions[i3 + 2] = MathUtils.randomFloat(-0.2, 0.2);
+
+        velocities[i3] = MathUtils.randomFloat(-1, 1);
+        velocities[i3 + 1] = MathUtils.randomFloat(0.5, 2);
+        velocities[i3 + 2] = MathUtils.randomFloat(-1, 1);
+
+        lifetimes[i] = MathUtils.randomFloat(0.5, 1.5);
+      } else {
+        // Update particle position
+        positions[i3] += velocities[i3] * delta;
+        positions[i3 + 1] += velocities[i3 + 1] * delta;
+        positions[i3 + 2] += velocities[i3 + 2] * delta;
+
+        // Apply gravity
+        velocities[i3 + 1] -= 2 * delta;
+      }
+    }
+
+    particlesRef.current.geometry.attributes.position.needsUpdate = true;
+  });
+
+  useEffect(() => {
+    // Initialize particles
+    for (let i = 0; i < particleCount; i++) {
+      const i3 = i * 3;
+      positions[i3] = MathUtils.randomFloat(-0.3, 0.3);
+      positions[i3 + 1] = 0;
+      positions[i3 + 2] = MathUtils.randomFloat(-0.2, 0.2);
+      lifetimes[i] = MathUtils.randomFloat(0, 1.5);
+    }
+  }, []);
+
+  return (
+    <points ref={particlesRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          array={positions}
+          count={particleCount}
+          itemSize={3}
+        />
+      </bufferGeometry>
+      <pointsMaterial
+        size={0.05}
+        color={0x8B4513}
+        transparent
+        opacity={0.6}
+      />
+    </points>
+  );
+}
+
+// ========================================
+// 🌟 EFECTO DE TRAIL AL SALTAR
+// ========================================
+
+function JumpTrailEffect() {
+  const trailRef = useRef();
+
+  useFrame((state) => {
+    if (!trailRef.current) return;
+
+    const time = state.clock.elapsedTime;
+    trailRef.current.material.opacity = 0.5 + 0.3 * Math.sin(time * 10);
+  });
+
+  return (
+    <mesh ref={trailRef} position={[0, 0, 0]}>
+      <sphereGeometry args={[0.6, 8, 8]} />
+      <meshBasicMaterial
+        color={0x00aaff}
+        transparent
+        opacity={0.3}
+        wireframe
+      />
+    </mesh>
+  );
+}
+
+// ========================================
+// 💫 EFECTO DE POWER-UP
+// ========================================
+
+function PowerUpEffect({ powerUp }) {
+  const effectRef = useRef();
+
+  useFrame((state) => {
+    if (!effectRef.current) return;
+
+    const time = state.clock.elapsedTime;
+    effectRef.current.rotation.y = time * 2;
+    effectRef.current.scale.setScalar(1 + 0.1 * Math.sin(time * 5));
+  });
+
+  const color = powerUp.color || 0xffffff;
+
+  return (
+    <group ref={effectRef} position={[0, 1, 0]}>
+      <mesh>
+        <torusGeometry args={[0.8, 0.1, 8, 16]} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={0.6}
+        />
+      </mesh>
+    </group>
   );
 }
 
