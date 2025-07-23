@@ -1,300 +1,567 @@
-// ========================================
-// UTILIDADES DEL JUEGO COMPLETAS
-// Matemáticas, Física, Procedural, Gameplay
-// Ubicación: src/utils/gameUtils.js
-// ========================================
+/* ============================================================================ */
+/* 🎮 CRASH WORM 3D - UTILIDADES DEL JUEGO */
+/* ============================================================================ */
 
 import * as THREE from 'three';
-import * as math from 'mathjs';
+import { gameConfig } from '@/data/gameConfig';
 
 // ========================================
-// UTILIDADES MATEMÁTICAS
+// 🧮 UTILIDADES MATEMÁTICAS
 // ========================================
 
-export const lerp = (start, end, factor) => {
-  return start + (end - start) * factor;
-};
+export const MathUtils = {
+  // Interpolación lineal
+  lerp(a, b, t) {
+    return a + (b - a) * t;
+  },
 
-export const smoothLerp = (start, end, factor) => {
-  const smoothFactor = factor * factor * (3 - 2 * factor);
-  return lerp(start, end, smoothFactor);
-};
+  // Interpolación suavizada
+  smoothstep(edge0, edge1, x) {
+    const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+    return t * t * (3 - 2 * t);
+  },
 
-export const clamp = (value, min, max) => {
-  return Math.min(Math.max(value, min), max);
-};
+  // Clamp value between min and max
+  clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  },
 
-export const mapRange = (value, inMin, inMax, outMin, outMax) => {
-  return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
-};
+  // Remap value from one range to another
+  remap(value, oldMin, oldMax, newMin, newMax) {
+    return newMin + (value - oldMin) * (newMax - newMin) / (oldMax - oldMin);
+  },
 
-export const distance3D = (pos1, pos2) => {
-  const dx = pos1.x - pos2.x;
-  const dy = pos1.y - pos2.y;
-  const dz = pos1.z - pos2.z;
-  return Math.sqrt(dx * dx + dy * dy + dz * dz);
-};
+  // Random between min and max
+  random(min = 0, max = 1) {
+    return min + Math.random() * (max - min);
+  },
 
-export const normalize3D = (vector) => {
-  const length = Math.sqrt(vector.x * vector.x + vector.y * vector.y + vector.z * vector.z);
-  if (length === 0) return { x: 0, y: 0, z: 0 };
-  return {
-    x: vector.x / length,
-    y: vector.y / length,
-    z: vector.z / length
-  };
-};
+  // Random integer between min and max (inclusive)
+  randomInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  },
 
-export const dotProduct3D = (v1, v2) => {
-  return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
-};
+  // Random boolean with probability
+  randomBool(probability = 0.5) {
+    return Math.random() < probability;
+  },
 
-export const crossProduct3D = (v1, v2) => {
-  return {
-    x: v1.y * v2.z - v1.z * v2.y,
-    y: v1.z * v2.x - v1.x * v2.z,
-    z: v1.x * v2.y - v1.y * v2.x
-  };
-};
+  // Distance between two points
+  distance(a, b) {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const dz = (b.z || 0) - (a.z || 0);
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+  },
 
-// ========================================
-// UTILIDADES DE FÍSICA
-// ========================================
+  // Distance squared (faster when you don't need exact distance)
+  distanceSquared(a, b) {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const dz = (b.z || 0) - (a.z || 0);
+    return dx * dx + dy * dy + dz * dz;
+  },
 
-export const calculateJumpVelocity = (height, gravity = -9.81) => {
-  return Math.sqrt(-2 * gravity * height);
-};
+  // Normalize angle to 0-2π
+  normalizeAngle(angle) {
+    while (angle < 0) angle += Math.PI * 2;
+    while (angle >= Math.PI * 2) angle -= Math.PI * 2;
+    return angle;
+  },
 
-export const calculateProjectileTrajectory = (initialVelocity, angle, gravity = 9.81) => {
-  const radians = (angle * Math.PI) / 180;
-  const vx = initialVelocity * Math.cos(radians);
-  const vy = initialVelocity * Math.sin(radians);
-  
-  return {
-    range: (vx * vy * 2) / gravity,
-    maxHeight: (vy * vy) / (2 * gravity),
-    timeOfFlight: (2 * vy) / gravity,
-    velocityComponents: { vx, vy }
-  };
-};
+  // Shortest angle difference
+  angleDifference(a, b) {
+    const diff = this.normalizeAngle(b - a);
+    return diff > Math.PI ? diff - Math.PI * 2 : diff;
+  },
 
-export const sphereCollision = (sphere1, sphere2) => {
-  const distance = distance3D(sphere1.position, sphere2.position);
-  const minDistance = sphere1.radius + sphere2.radius;
-  return distance < minDistance;
-};
+  // Check if point is inside AABB
+  pointInAABB(point, aabb) {
+    return point.x >= aabb.min.x && point.x <= aabb.max.x &&
+           point.y >= aabb.min.y && point.y <= aabb.max.y &&
+           (point.z === undefined || (point.z >= aabb.min.z && point.z <= aabb.max.z));
+  },
 
-export const sphereBoxCollision = (sphere, box) => {
-  const closestPoint = {
-    x: clamp(sphere.position.x, box.min.x, box.max.x),
-    y: clamp(sphere.position.y, box.min.y, box.max.y),
-    z: clamp(sphere.position.z, box.min.z, box.max.z)
-  };
-  
-  const distance = distance3D(sphere.position, closestPoint);
-  return distance < sphere.radius;
-};
-
-export const applyFriction = (velocity, frictionCoefficient, deltaTime) => {
-  const friction = frictionCoefficient * deltaTime;
-  return {
-    x: velocity.x * (1 - friction),
-    y: velocity.y,
-    z: velocity.z * (1 - friction)
-  };
-};
-
-export const elasticCollision = (obj1, obj2) => {
-  const totalMass = obj1.mass + obj2.mass;
-  const newVel1 = {
-    x: ((obj1.mass - obj2.mass) * obj1.velocity.x + 2 * obj2.mass * obj2.velocity.x) / totalMass,
-    y: obj1.velocity.y,
-    z: ((obj1.mass - obj2.mass) * obj1.velocity.z + 2 * obj2.mass * obj2.velocity.z) / totalMass
-  };
-  
-  const newVel2 = {
-    x: ((obj2.mass - obj1.mass) * obj2.velocity.x + 2 * obj1.mass * obj1.velocity.x) / totalMass,
-    y: obj2.velocity.y,
-    z: ((obj2.mass - obj1.mass) * obj2.velocity.z + 2 * obj1.mass * obj1.velocity.z) / totalMass
-  };
-  
-  return { velocity1: newVel1, velocity2: newVel2 };
+  // Easing functions
+  easeInQuad(t) { return t * t; },
+  easeOutQuad(t) { return t * (2 - t); },
+  easeInOutQuad(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; },
+  easeInCubic(t) { return t * t * t; },
+  easeOutCubic(t) { return (--t) * t * t + 1; },
+  easeInOutCubic(t) { return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1; }
 };
 
 // ========================================
-// UTILIDADES PROCEDURALES
+// 🎮 UTILIDADES DE GAME OBJECTS
 // ========================================
 
-export const simpleNoise = (x, y, z = 0) => {
-  const a = 12.9898;
-  const b = 78.233;
-  const c = 43758.5453;
-  const dt = (x * a) + (y * b) + (z * a);
-  return ((Math.sin(dt) * c) % 1 + 1) % 1;
-};
+export const GameObjectUtils = {
+  // Create basic game object structure
+  createGameObject(name, position = { x: 0, y: 0, z: 0 }) {
+    return {
+      id: generateUUID(),
+      name,
+      active: true,
+      transform: {
+        position: { ...position },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 }
+      },
+      components: new Map(),
+      children: [],
+      parent: null
+    };
+  },
 
-export const generateTerrainHeight = (x, z, frequency = 0.1, amplitude = 10) => {
-  const noise1 = simpleNoise(x * frequency, z * frequency) * amplitude;
-  const noise2 = simpleNoise(x * frequency * 2, z * frequency * 2) * amplitude * 0.5;
-  return noise1 + noise2;
-};
-
-export const randomPositionInSphere = (radius = 1) => {
-  const u = Math.random();
-  const v = Math.random();
-  const theta = u * 2.0 * Math.PI;
-  const phi = Math.acos(2.0 * v - 1.0);
-  const r = Math.cbrt(Math.random()) * radius;
-  
-  return {
-    x: r * Math.sin(phi) * Math.cos(theta),
-    y: r * Math.sin(phi) * Math.sin(theta),
-    z: r * Math.cos(phi)
-  };
-};
-
-export const generateSpiral = (turns, pointsPerTurn, radius) => {
-  const points = [];
-  const totalPoints = turns * pointsPerTurn;
-  
-  for (let i = 0; i < totalPoints; i++) {
-    const angle = (i / pointsPerTurn) * 2 * Math.PI;
-    const height = (i / totalPoints) * turns * 4;
-    const currentRadius = radius * (1 - i / totalPoints);
-    
-    points.push({
-      x: Math.cos(angle) * currentRadius,
-      y: height,
-      z: Math.sin(angle) * currentRadius
-    });
-  }
-  
-  return points;
-};
-
-// ========================================
-// UTILIDADES DE COLOR
-// ========================================
-
-export const hslToRgb = (h, s, l) => {
-  h /= 360;
-  s /= 100;
-  l /= 100;
-  
-  const hue2rgb = (p, q, t) => {
-    if (t < 0) t += 1;
-    if (t > 1) t -= 1;
-    if (t < 1/6) return p + (q - p) * 6 * t;
-    if (t < 1/2) return q;
-    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-    return p;
-  };
-  
-  let r, g, b;
-  
-  if (s === 0) {
-    r = g = b = l;
-  } else {
-    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-    const p = 2 * l - q;
-    r = hue2rgb(p, q, h + 1/3);
-    g = hue2rgb(p, q, h);
-    b = hue2rgb(p, q, h - 1/3);
-  }
-  
-  return {
-    r: Math.round(r * 255),
-    g: Math.round(g * 255),
-    b: Math.round(b * 255)
-  };
-};
-
-export const valueToColor = (value, min = 0, max = 1) => {
-  const normalized = clamp((value - min) / (max - min), 0, 1);
-  const hue = (1 - normalized) * 120; // De rojo (0) a verde (120)
-  return hslToRgb(hue, 100, 50);
-};
-
-export const lerpColor = (color1, color2, factor) => {
-  return {
-    r: lerp(color1.r, color2.r, factor),
-    g: lerp(color1.g, color2.g, factor),
-    b: lerp(color1.b, color2.b, factor)
-  };
-};
-
-export const generateColorPalette = (baseHue, count = 5) => {
-  const colors = [];
-  for (let i = 0; i < count; i++) {
-    const hue = (baseHue + (i * 360 / count)) % 360;
-    colors.push(hslToRgb(hue, 70, 50));
-  }
-  return colors;
-};
-
-// ========================================
-// UTILIDADES DE GAMEPLAY
-// ========================================
-
-export const calculateScore = (baseScore, multiplier, timeBonus = 0) => {
-  return Math.floor(baseScore * multiplier + timeBonus);
-};
-
-export const calculateExperience = (level, baseXP = 100) => {
-  return Math.floor(baseXP * Math.pow(1.5, level - 1));
-};
-
-export const calculateDropRarity = (luck = 0) => {
-  const random = Math.random() + (luck * 0.1);
-  if (random > 0.95) return 'legendary';
-  if (random > 0.8) return 'epic';
-  if (random > 0.6) return 'rare';
-  if (random > 0.3) return 'uncommon';
-  return 'common';
-};
-
-export const generateEnemyPattern = (type, level) => {
-  const patterns = {
-    basic: {
-      speed: 1 + level * 0.1,
-      health: 10 + level * 2,
-      damage: 5 + level,
-      ai: 'simple'
-    },
-    flying: {
-      speed: 1.5 + level * 0.15,
-      health: 8 + level * 1.5,
-      damage: 4 + level,
-      ai: 'flying'
-    },
-    heavy: {
-      speed: 0.7 + level * 0.05,
-      health: 20 + level * 4,
-      damage: 10 + level * 2,
-      ai: 'aggressive'
+  // Add child to parent
+  addChild(parent, child) {
+    if (child.parent) {
+      this.removeChild(child.parent, child);
     }
-  };
-  
-  return patterns[type] || patterns.basic;
+
+    parent.children.push(child);
+    child.parent = parent;
+  },
+
+  // Remove child from parent
+  removeChild(parent, child) {
+    const index = parent.children.indexOf(child);
+    if (index > -1) {
+      parent.children.splice(index, 1);
+      child.parent = null;
+    }
+  },
+
+  // Get world position
+  getWorldPosition(gameObject) {
+    if (!gameObject.parent) {
+      return { ...gameObject.transform.position };
+    }
+
+    const parentWorld = this.getWorldPosition(gameObject.parent);
+    return {
+      x: parentWorld.x + gameObject.transform.position.x,
+      y: parentWorld.y + gameObject.transform.position.y,
+      z: parentWorld.z + gameObject.transform.position.z
+    };
+  },
+
+  // Find child by name
+  findChild(parent, name) {
+    for (const child of parent.children) {
+      if (child.name === name) return child;
+
+      const found = this.findChild(child, name);
+      if (found) return found;
+    }
+    return null;
+  },
+
+  // Get all children recursively
+  getAllChildren(parent) {
+    const children = [...parent.children];
+    for (const child of parent.children) {
+      children.push(...this.getAllChildren(child));
+    }
+    return children;
+  }
 };
 
 // ========================================
-// UTILIDADES DE RENDIMIENTO
+// 🎨 UTILIDADES DE COLOR
 // ========================================
 
-export const debounce = (func, wait) => {
+export const ColorUtils = {
+  // Convert hex to RGB
+  hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : null;
+  },
+
+  // Convert RGB to hex
+  rgbToHex(r, g, b) {
+    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  },
+
+  // Convert HSL to RGB
+  hslToRgb(h, s, l) {
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+    const m = l - c / 2;
+
+    let r, g, b;
+
+    if (0 <= h && h < 60) {
+      [r, g, b] = [c, x, 0];
+    } else if (60 <= h && h < 120) {
+      [r, g, b] = [x, c, 0];
+    } else if (120 <= h && h < 180) {
+      [r, g, b] = [0, c, x];
+    } else if (180 <= h && h < 240) {
+      [r, g, b] = [0, x, c];
+    } else if (240 <= h && h < 300) {
+      [r, g, b] = [x, 0, c];
+    } else if (300 <= h && h < 360) {
+      [r, g, b] = [c, 0, x];
+    }
+
+    return {
+      r: Math.round((r + m) * 255),
+      g: Math.round((g + m) * 255),
+      b: Math.round((b + m) * 255)
+    };
+  },
+
+  // Interpolate between two colors
+  lerpColor(color1, color2, t) {
+    const rgb1 = this.hexToRgb(color1);
+    const rgb2 = this.hexToRgb(color2);
+
+    if (!rgb1 || !rgb2) return color1;
+
+    const r = Math.round(MathUtils.lerp(rgb1.r, rgb2.r, t));
+    const g = Math.round(MathUtils.lerp(rgb1.g, rgb2.g, t));
+    const b = Math.round(MathUtils.lerp(rgb1.b, rgb2.b, t));
+
+    return this.rgbToHex(r, g, b);
+  },
+
+  // Get random color
+  randomColor() {
+    return this.rgbToHex(
+      MathUtils.randomInt(0, 255),
+      MathUtils.randomInt(0, 255),
+      MathUtils.randomInt(0, 255)
+    );
+  },
+
+  // Get color brightness (0-1)
+  getBrightness(color) {
+    const rgb = this.hexToRgb(color);
+    if (!rgb) return 0;
+    return (rgb.r * 0.299 + rgb.g * 0.587 + rgb.b * 0.114) / 255;
+  }
+};
+
+// ========================================
+// ⏱️ UTILIDADES DE TIEMPO
+// ========================================
+
+export const TimeUtils = {
+  // Format time as MM:SS
+  formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  },
+
+  // Format time as HH:MM:SS
+  formatTimeDetailed(seconds) {
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+
+    if (hours > 0) {
+      return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  },
+
+  // Get current timestamp
+  now() {
+    return Date.now();
+  },
+
+  // Get elapsed time in seconds
+  getElapsed(startTime) {
+    return (Date.now() - startTime) / 1000;
+  },
+
+  // Create a timer
+  createTimer(duration, onComplete, onTick) {
+    const startTime = Date.now();
+    const timer = {
+      startTime,
+      duration: duration * 1000,
+      onComplete,
+      onTick,
+      isRunning: true,
+      isPaused: false,
+      pauseTime: 0,
+      totalPauseTime: 0
+    };
+
+    const update = () => {
+      if (!timer.isRunning) return;
+
+      if (timer.isPaused) {
+        requestAnimationFrame(update);
+        return;
+      }
+
+      const elapsed = Date.now() - timer.startTime - timer.totalPauseTime;
+      const remaining = Math.max(0, timer.duration - elapsed);
+      const progress = 1 - (remaining / timer.duration);
+
+      if (timer.onTick) {
+        timer.onTick(remaining / 1000, progress);
+      }
+
+      if (remaining <= 0) {
+        timer.isRunning = false;
+        if (timer.onComplete) {
+          timer.onComplete();
+        }
+      } else {
+        requestAnimationFrame(update);
+      }
+    };
+
+    timer.pause = () => {
+      if (!timer.isPaused) {
+        timer.isPaused = true;
+        timer.pauseTime = Date.now();
+      }
+    };
+
+    timer.resume = () => {
+      if (timer.isPaused) {
+        timer.totalPauseTime += Date.now() - timer.pauseTime;
+        timer.isPaused = false;
+      }
+    };
+
+    timer.stop = () => {
+      timer.isRunning = false;
+    };
+
+    requestAnimationFrame(update);
+    return timer;
+  }
+};
+
+// ========================================
+// 🎲 UTILIDADES DE COLISIONES
+// ========================================
+
+export const CollisionUtils = {
+  // AABB vs AABB collision
+  aabbVsAabb(a, b) {
+    return a.min.x <= b.max.x &&
+           a.max.x >= b.min.x &&
+           a.min.y <= b.max.y &&
+           a.max.y >= b.min.y &&
+           a.min.z <= b.max.z &&
+           a.max.z >= b.min.z;
+  },
+
+  // Point vs AABB collision
+  pointVsAabb(point, aabb) {
+    return point.x >= aabb.min.x && point.x <= aabb.max.x &&
+           point.y >= aabb.min.y && point.y <= aabb.max.y &&
+           point.z >= aabb.min.z && point.z <= aabb.max.z;
+  },
+
+  // Sphere vs Sphere collision
+  sphereVsSphere(a, b) {
+    const distance = MathUtils.distance(a.center, b.center);
+    return distance <= (a.radius + b.radius);
+  },
+
+  // Point vs Sphere collision
+  pointVsSphere(point, sphere) {
+    const distance = MathUtils.distance(point, sphere.center);
+    return distance <= sphere.radius;
+  },
+
+  // Ray vs AABB intersection
+  rayVsAabb(origin, direction, aabb) {
+    const invDir = {
+      x: 1 / direction.x,
+      y: 1 / direction.y,
+      z: 1 / direction.z
+    };
+
+    const t1 = (aabb.min.x - origin.x) * invDir.x;
+    const t2 = (aabb.max.x - origin.x) * invDir.x;
+    const t3 = (aabb.min.y - origin.y) * invDir.y;
+    const t4 = (aabb.max.y - origin.y) * invDir.y;
+    const t5 = (aabb.min.z - origin.z) * invDir.z;
+    const t6 = (aabb.max.z - origin.z) * invDir.z;
+
+    const tmin = Math.max(Math.max(Math.min(t1, t2), Math.min(t3, t4)), Math.min(t5, t6));
+    const tmax = Math.min(Math.min(Math.max(t1, t2), Math.max(t3, t4)), Math.max(t5, t6));
+
+    if (tmax < 0 || tmin > tmax) {
+      return null;
+    }
+
+    const t = tmin > 0 ? tmin : tmax;
+    return {
+      point: {
+        x: origin.x + direction.x * t,
+        y: origin.y + direction.y * t,
+        z: origin.z + direction.z * t
+      },
+      distance: t,
+      normal: this.getAABBNormal(origin, direction, aabb, t)
+    };
+  },
+
+  // Get normal from AABB intersection
+  getAABBNormal(origin, direction, aabb, t) {
+    const point = {
+      x: origin.x + direction.x * t,
+      y: origin.y + direction.y * t,
+      z: origin.z + direction.z * t
+    };
+
+    const center = {
+      x: (aabb.min.x + aabb.max.x) / 2,
+      y: (aabb.min.y + aabb.max.y) / 2,
+      z: (aabb.min.z + aabb.max.z) / 2
+    };
+
+    const size = {
+      x: aabb.max.x - aabb.min.x,
+      y: aabb.max.y - aabb.min.y,
+      z: aabb.max.z - aabb.min.z
+    };
+
+    const d = {
+      x: (point.x - center.x) / (size.x / 2),
+      y: (point.y - center.y) / (size.y / 2),
+      z: (point.z - center.z) / (size.z / 2)
+    };
+
+    const absd = {
+      x: Math.abs(d.x),
+      y: Math.abs(d.y),
+      z: Math.abs(d.z)
+    };
+
+    if (absd.x > absd.y && absd.x > absd.z) {
+      return { x: Math.sign(d.x), y: 0, z: 0 };
+    } else if (absd.y > absd.z) {
+      return { x: 0, y: Math.sign(d.y), z: 0 };
+    } else {
+      return { x: 0, y: 0, z: Math.sign(d.z) };
+    }
+  }
+};
+
+// ========================================
+// 🎯 UTILIDADES DEL JUEGO
+// ========================================
+
+export const GameUtils = {
+  // Calculate score based on performance
+  calculateScore(baseScore, timeBonus, healthBonus, multiplier = 1) {
+    return Math.floor((baseScore + timeBonus + healthBonus) * multiplier);
+  },
+
+  // Get difficulty multiplier
+  getDifficultyMultiplier(difficulty) {
+    const multipliers = gameConfig.levels.difficulties;
+    return multipliers[difficulty] || multipliers.normal;
+  },
+
+  // Calculate level stars based on performance
+  calculateStars(score, time, collectibles, requirements) {
+    let stars = 0;
+
+    // Time requirements
+    if (time <= requirements.timeRequirements[2]) stars = 3;
+    else if (time <= requirements.timeRequirements[1]) stars = 2;
+    else if (time <= requirements.timeRequirements[0]) stars = 1;
+
+    // Collectible requirements
+    const collectibleRatio = collectibles / requirements.totalCollectibles;
+    if (collectibleRatio < requirements.collectibleRequirements[0]) {
+      stars = Math.min(stars, 0);
+    } else if (collectibleRatio < requirements.collectibleRequirements[1]) {
+      stars = Math.min(stars, 1);
+    } else if (collectibleRatio < requirements.collectibleRequirements[2]) {
+      stars = Math.min(stars, 2);
+    }
+
+    return stars;
+  },
+
+  // Format large numbers
+  formatNumber(num) {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+      return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toLocaleString();
+  },
+
+  // Validate save data
+  validateSaveData(data) {
+    if (!data || typeof data !== 'object') return false;
+
+    const required = ['score', 'level', 'health', 'saveData'];
+    return required.every(key => key in data);
+  },
+
+  // Compress save data
+  compressSaveData(data) {
+    try {
+      return LZString.compress(JSON.stringify(data));
+    } catch (error) {
+      console.warn('Failed to compress save data:', error);
+      return JSON.stringify(data);
+    }
+  },
+
+  // Decompress save data
+  decompressSaveData(compressedData) {
+    try {
+      const decompressed = LZString.decompress(compressedData);
+      return decompressed ? JSON.parse(decompressed) : JSON.parse(compressedData);
+    } catch (error) {
+      console.warn('Failed to decompress save data:', error);
+      return null;
+    }
+  }
+};
+
+// ========================================
+// 🔧 UTILIDADES GENERALES
+// ========================================
+
+// Generate UUID
+export function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+// Debounce function
+export function debounce(func, wait, immediate = false) {
   let timeout;
   return function executedFunction(...args) {
     const later = () => {
-      clearTimeout(timeout);
-      func(...args);
+      timeout = null;
+      if (!immediate) func(...args);
     };
+    const callNow = immediate && !timeout;
     clearTimeout(timeout);
     timeout = setTimeout(later, wait);
+    if (callNow) func(...args);
   };
-};
+}
 
-export const throttle = (func, limit) => {
+// Throttle function
+export function throttle(func, limit) {
   let inThrottle;
   return function(...args) {
     if (!inThrottle) {
@@ -303,163 +570,77 @@ export const throttle = (func, limit) => {
       setTimeout(() => inThrottle = false, limit);
     }
   };
-};
+}
 
-export class ObjectPool {
-  constructor(createFn, resetFn, initialSize = 10) {
-    this.createFn = createFn;
-    this.resetFn = resetFn;
-    this.pool = [];
-    this.used = new Set();
-    
-    // Crear objetos iniciales
-    for (let i = 0; i < initialSize; i++) {
-      this.pool.push(this.createFn());
+// Deep clone object
+export function deepClone(obj) {
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (obj instanceof Date) return new Date(obj.getTime());
+  if (obj instanceof Array) return obj.map(item => deepClone(item));
+  if (typeof obj === 'object') {
+    const clonedObj = {};
+    for (const key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        clonedObj[key] = deepClone(obj[key]);
+      }
     }
-  }
-  
-  get() {
-    let obj;
-    if (this.pool.length > 0) {
-      obj = this.pool.pop();
-    } else {
-      obj = this.createFn();
-    }
-    this.used.add(obj);
-    return obj;
-  }
-  
-  release(obj) {
-    if (this.used.has(obj)) {
-      this.used.delete(obj);
-      this.resetFn(obj);
-      this.pool.push(obj);
-    }
-  }
-  
-  clear() {
-    this.pool.length = 0;
-    this.used.clear();
+    return clonedObj;
   }
 }
 
-// ========================================
-// UTILIDADES DE FORMATO
-// ========================================
+// Check if value is empty
+export function isEmpty(value) {
+  if (value === null || value === undefined) return true;
+  if (typeof value === 'string') return value.trim().length === 0;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === 'object') return Object.keys(value).length === 0;
+  return false;
+}
 
-export const formatTime = (seconds) => {
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-};
+// Get nested object property safely
+export function getNestedProperty(obj, path, defaultValue = undefined) {
+  const keys = path.split('.');
+  let current = obj;
 
-export const formatNumber = (num) => {
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(1) + 'M';
+  for (const key of keys) {
+    if (current === null || current === undefined || !(key in current)) {
+      return defaultValue;
+    }
+    current = current[key];
   }
-  if (num >= 1000) {
-    return (num / 1000).toFixed(1) + 'K';
+
+  return current;
+}
+
+// Set nested object property
+export function setNestedProperty(obj, path, value) {
+  const keys = path.split('.');
+  const lastKey = keys.pop();
+  let current = obj;
+
+  for (const key of keys) {
+    if (!(key in current) || typeof current[key] !== 'object') {
+      current[key] = {};
+    }
+    current = current[key];
   }
-  return num.toString();
-};
 
-export const formatPercentage = (value, total) => {
-  const percentage = (value / total) * 100;
-  return `${percentage.toFixed(1)}%`;
-};
+  current[lastKey] = value;
+  return obj;
+}
 
-// ========================================
-// UTILIDADES DE VALIDACIÓN
-// ========================================
-
-export const isValidPosition3D = (position) => {
-  return position && 
-    typeof position.x === 'number' && !isNaN(position.x) &&
-    typeof position.y === 'number' && !isNaN(position.y) &&
-    typeof position.z === 'number' && !isNaN(position.z);
-};
-
-export const validateGameConfig = (config) => {
-  const required = ['player', 'world', 'physics', 'graphics'];
-  const missing = required.filter(key => !(key in config));
-  
-  if (missing.length > 0) {
-    throw new Error(`Missing required config keys: ${missing.join(', ')}`);
-  }
-  
-  return true;
-};
-
-// ========================================
-// EXPORTAR UTILIDADES ORGANIZADAS
-// ========================================
-
-export const MathUtils = {
-  lerp,
-  smoothLerp,
-  clamp,
-  mapRange,
-  distance3D,
-  normalize3D,
-  dotProduct3D,
-  crossProduct3D
-};
-
-export const PhysicsUtils = {
-  calculateJumpVelocity,
-  calculateProjectileTrajectory,
-  sphereCollision,
-  sphereBoxCollision,
-  applyFriction,
-  elasticCollision
-};
-
-export const ProceduralUtils = {
-  simpleNoise,
-  generateTerrainHeight,
-  randomPositionInSphere,
-  generateSpiral
-};
-
-export const ColorUtils = {
-  hslToRgb,
-  valueToColor,
-  lerpColor,
-  generateColorPalette
-};
-
-export const GameplayUtils = {
-  calculateScore,
-  calculateExperience,
-  calculateDropRarity,
-  generateEnemyPattern
-};
-
-export const PerformanceUtils = {
-  debounce,
-  throttle,
-  ObjectPool
-};
-
-export const FormatUtils = {
-  formatTime,
-  formatNumber,
-  formatPercentage
-};
-
-export const ValidationUtils = {
-  isValidPosition3D,
-  validateGameConfig
-};
-
-// Exportación por defecto con todas las utilidades
 export default {
   MathUtils,
-  PhysicsUtils,
-  ProceduralUtils,
+  GameObjectUtils,
   ColorUtils,
-  GameplayUtils,
-  PerformanceUtils,
-  FormatUtils,
-  ValidationUtils
+  TimeUtils,
+  CollisionUtils,
+  GameUtils,
+  generateUUID,
+  debounce,
+  throttle,
+  deepClone,
+  isEmpty,
+  getNestedProperty,
+  setNestedProperty
 };
