@@ -1,541 +1,729 @@
 /* ============================================================================ */
-/* 🎮 CRASH WORM 3D - COMPONENTES DE PLATAFORMAS */
+/* 🎮 CRASH WORM 3D - SISTEMA DE PLATAFORMAS */
 /* ============================================================================ */
+/* Ubicación: src/components/Platforms.jsx */
 
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { useBox } from '@react-three/rapier';
-import { useTexture } from '@react-three/drei';
+import { RigidBody, CuboidCollider } from '@react-three/rapier';
 import * as THREE from 'three';
-import { useGame } from '@/context/GameContext';
-import { gameConfig } from '@/data/gameConfig';
-import { MathUtils } from '@/utils/gameUtils';
+import { useGameContext } from '../context/GameContext';
+import { useAudioManager } from '../hooks/useAudioManager';
+import { gameConfig } from '../data/gameConfig';
+import { MathUtils, VectorUtils, GameUtils } from '../utils/gameUtils';
 
 // ========================================
-// 🏗️ MANAGER DE PLATAFORMAS
+// 🏗️ COMPONENTE PRINCIPAL DE PLATAFORMAS
 // ========================================
 
-export function PlatformManager({ levelData = {} }) {
-  const { utils } = useGame();
-  const [platforms, setPlatforms] = useState([]);
+export function Platforms({ levelData, onPlatformInteraction, ...props }) {
+  const { currentLevel, settings } = useGameContext();
+  const { playSound } = useAudioManager();
 
-  // Cargar plataformas del nivel
-  useEffect(() => {
-    if (!utils.isPlaying) return;
-
-    const loadPlatforms = () => {
-      const platformConfigs = levelData.platforms || [
-        // Plataformas estáticas básicas
-        { type: 'static', position: [0, 0, 0], size: [20, 1, 4], material: 'grass' },
-        { type: 'static', position: [25, 2, 0], size: [8, 1, 4], material: 'stone' },
-        { type: 'static', position: [40, 4, 0], size: [6, 1, 4], material: 'metal' },
-
-        // Plataformas móviles
-        { type: 'moving', position: [15, 6, 0], size: [4, 0.5, 4],
-          movement: { type: 'horizontal', distance: 8, speed: 2 }, material: 'wood' },
-        { type: 'moving', position: [35, 8, 0], size: [3, 0.5, 3],
-          movement: { type: 'vertical', distance: 6, speed: 1.5 }, material: 'crystal' },
-
-        // Plataforma rotatoria
-        { type: 'rotating', position: [55, 6, 0], size: [8, 1, 2],
-          rotation: { axis: 'y', speed: 1 }, material: 'metal' },
-
-        // Plataformas que caen
-        { type: 'falling', position: [70, 10, 0], size: [4, 0.5, 4],
-          trigger: { delay: 1, fallSpeed: 15 }, material: 'wood' },
-
-        // Plataformas temporales
-        { type: 'disappearing', position: [85, 8, 0], size: [5, 0.5, 4],
-          timer: { visible: 3, hidden: 2 }, material: 'energy' }
-      ];
-
-      const newPlatforms = platformConfigs.map((config, index) => ({
-        id: index,
-        ...config,
-        active: true,
-        originalPosition: [...config.position],
-        state: getInitialPlatformState(config.type)
-      }));
-
-      setPlatforms(newPlatforms);
-    };
-
-    loadPlatforms();
-  }, [utils.isPlaying, levelData]);
-
-  const getInitialPlatformState = (type) => {
-    switch (type) {
-      case 'moving':
-        return { direction: 1, currentDistance: 0 };
-      case 'rotating':
-        return { currentRotation: 0 };
-      case 'falling':
-        return { triggered: false, falling: false };
-      case 'disappearing':
-        return { visible: true, timer: 0 };
-      default:
-        return {};
+  // Generate platforms based on level data or procedurally
+  const platforms = useMemo(() => {
+    if (levelData?.platforms) {
+      return levelData.platforms;
     }
-  };
+
+    // Procedural platform generation
+    return generateProceduralPlatforms(currentLevel);
+  }, [levelData, currentLevel]);
 
   return (
-    <group>
-      {platforms.map(platform => (
-        platform.active && (
-          <Platform
-            key={platform.id}
-            {...platform}
-          />
-        )
+    <group {...props}>
+      {platforms.map((platformData, index) => (
+        <Platform
+          key={`platform-${index}`}
+          data={platformData}
+          onInteraction={onPlatformInteraction}
+        />
       ))}
     </group>
   );
 }
 
 // ========================================
-// 🧱 COMPONENTE BASE DE PLATAFORMA
+// 🟫 COMPONENTE DE PLATAFORMA INDIVIDUAL
 // ========================================
 
-function Platform({
-  id,
-  type,
-  position,
-  originalPosition,
-  size,
-  material,
-  movement,
-  rotation,
-  trigger,
-  timer,
-  state: initialState
-}) {
-  const { utils } = useGame();
-
-  const platformRef = useRef();
+function Platform({ data, onInteraction }) {
   const meshRef = useRef();
+  const rigidBodyRef = useRef();
+  const [isActive, setIsActive] = useState(true);
+  const [currentPosition, setCurrentPosition] = useState(data.position);
+  const [animationTime, setAnimationTime] = useState(0);
 
-  const [platformState, setPlatformState] = useState(initialState);
-  const [isPlayerOnPlatform, setIsPlayerOnPlatform] = useState(false);
+  const { playSound } = useAudioManager();
+  const { settings } = useGameContext();
 
-  // Configurar física
-  const [ref, api] = useBox(() => ({
-    mass: type === 'falling' ? 1 : 0, // Solo las plataformas que caen tienen masa
-    position,
-    args: size,
-    material: { friction: 0.8, restitution: 0.1 },
-    type: type === 'static' ? 'fixed' : 'kinematicPosition'
-  }));
-
-  // ========================================
-  // 🔄 SISTEMA DE MOVIMIENTO
-  // ========================================
-
-  const updateMovement = useCallback((deltaTime) => {
-    if (!ref.current || !utils.isPlaying) return;
-
-    switch (type) {
-      case 'moving':
-        updateMovingPlatform(deltaTime);
-        break;
-      case 'rotating':
-        updateRotatingPlatform(deltaTime);
-        break;
-      case 'falling':
-        updateFallingPlatform(deltaTime);
-        break;
-      case 'disappearing':
-        updateDisappearingPlatform(deltaTime);
-        break;
-    }
-  }, [type, utils.isPlaying]);
-
-  const updateMovingPlatform = useCallback((deltaTime) => {
-    if (!movement) return;
-
-    const { type: moveType, distance, speed } = movement;
-    const moveDistance = speed * deltaTime * platformState.direction;
-
-    setPlatformState(prev => {
-      let newDistance = prev.currentDistance + moveDistance;
-      let newDirection = prev.direction;
-
-      // Invertir dirección en los límites
-      if (newDistance >= distance) {
-        newDistance = distance;
-        newDirection = -1;
-      } else if (newDistance <= -distance) {
-        newDistance = -distance;
-        newDirection = 1;
-      }
-
-      // Calcular nueva posición
-      let newPosition = [...originalPosition];
-
-      if (moveType === 'horizontal') {
-        newPosition[0] = originalPosition[0] + newDistance;
-      } else if (moveType === 'vertical') {
-        newPosition[1] = originalPosition[1] + newDistance;
-      } else if (moveType === 'circular') {
-        const angle = (newDistance / distance) * Math.PI * 2;
-        newPosition[0] = originalPosition[0] + Math.cos(angle) * distance;
-        newPosition[1] = originalPosition[1] + Math.sin(angle) * distance;
-      }
-
-      // Actualizar posición física
-      api.setTranslation({ x: newPosition[0], y: newPosition[1], z: newPosition[2] }, false);
-
-      return {
-        ...prev,
-        currentDistance: newDistance,
-        direction: newDirection
-      };
-    });
-  }, [movement, originalPosition, platformState.direction, api]);
-
-  const updateRotatingPlatform = useCallback((deltaTime) => {
-    if (!rotation) return;
-
-    const { axis, speed } = rotation;
-    const rotationAmount = speed * deltaTime;
-
-    setPlatformState(prev => {
-      const newRotation = prev.currentRotation + rotationAmount;
-
-      // Aplicar rotación
-      if (meshRef.current) {
-        if (axis === 'x') {
-          meshRef.current.rotation.x = newRotation;
-        } else if (axis === 'y') {
-          meshRef.current.rotation.y = newRotation;
-        } else if (axis === 'z') {
-          meshRef.current.rotation.z = newRotation;
-        }
-      }
-
-      return { ...prev, currentRotation: newRotation };
-    });
-  }, [rotation]);
-
-  const updateFallingPlatform = useCallback((deltaTime) => {
-    if (!trigger || !isPlayerOnPlatform) return;
-
-    setPlatformState(prev => {
-      if (!prev.triggered && isPlayerOnPlatform) {
-        // Iniciar timer de caída
-        setTimeout(() => {
-          setPlatformState(current => ({ ...current, falling: true }));
-          api.setBodyType(1); // Cambiar a cuerpo dinámico
-        }, trigger.delay * 1000);
-
-        return { ...prev, triggered: true };
-      }
-
-      if (prev.falling) {
-        // Aplicar fuerza de caída
-        api.applyImpulse({ x: 0, y: -trigger.fallSpeed, z: 0 }, true);
-      }
-
-      return prev;
-    });
-  }, [trigger, isPlayerOnPlatform, api]);
-
-  const updateDisappearingPlatform = useCallback((deltaTime) => {
-    if (!timer) return;
-
-    setPlatformState(prev => {
-      const newTimer = prev.timer + deltaTime;
-      const cycle = timer.visible + timer.hidden;
-      const cyclePosition = newTimer % cycle;
-      const shouldBeVisible = cyclePosition < timer.visible;
-
-      if (shouldBeVisible !== prev.visible) {
-        // Cambiar visibilidad
-        if (meshRef.current) {
-          meshRef.current.visible = shouldBeVisible;
-        }
-
-        // Activar/desactivar física
-        api.setEnabled(shouldBeVisible);
-      }
-
-      return {
-        ...prev,
-        timer: newTimer,
-        visible: shouldBeVisible
-      };
-    });
-  }, [timer, api]);
-
-  // ========================================
-  // 🎯 DETECCIÓN DE JUGADOR
-  // ========================================
-
-  const checkPlayerOnPlatform = useCallback(() => {
-    // Esta función sería llamada por el sistema de colisiones
-    // Por simplicidad, aquí solo manejamos el estado
-  }, []);
-
-  // Callback para cuando el jugador entra/sale de la plataforma
-  const handlePlayerContact = useCallback((isOnPlatform) => {
-    setIsPlayerOnPlatform(isOnPlatform);
-  }, []);
-
-  // ========================================
-  // 🎨 MATERIALES Y TEXTURAS
-  // ========================================
-
-  const getPlatformMaterial = () => {
-    const materialConfigs = {
-      grass: { color: '#4a7c59', roughness: 0.8, metalness: 0.1 },
-      stone: { color: '#8c8c8c', roughness: 0.9, metalness: 0.1 },
-      metal: { color: '#b8b8b8', roughness: 0.2, metalness: 0.8 },
-      wood: { color: '#daa520', roughness: 0.8, metalness: 0.1 },
-      crystal: { color: '#e0e0ff', roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.8 },
-      energy: {
-        color: '#00ffff',
-        roughness: 0.0,
-        metalness: 0.0,
-        emissive: '#004444',
-        emissiveIntensity: 0.5,
-        transparent: true,
-        opacity: 0.9
-      }
-    };
-
-    const config = materialConfigs[material] || materialConfigs.stone;
-
-    return (
-      <meshStandardMaterial
-        color={config.color}
-        roughness={config.roughness}
-        metalness={config.metalness}
-        emissive={config.emissive}
-        emissiveIntensity={config.emissiveIntensity}
-        transparent={config.transparent}
-        opacity={config.opacity}
-      />
-    );
+  // Platform configuration
+  const config = {
+    size: data.size || { x: 2, y: 0.5, z: 2 },
+    position: data.position || { x: 0, y: 0, z: 0 },
+    type: data.type || 'static', // static, moving, breakable, bounce, ice, fire
+    movement: data.movement || null,
+    material: data.material || 'default',
+    ...data
   };
 
   // ========================================
-  // 🔄 GAME LOOP
+  // 🔄 PLATFORM MOVEMENT LOGIC
   // ========================================
 
-  useFrame((_, deltaTime) => {
-    if (!utils.isPlaying) return;
+  useFrame((state, delta) => {
+    if (!meshRef.current || !rigidBodyRef.current) return;
 
-    updateMovement(deltaTime);
-    checkPlayerOnPlatform();
+    setAnimationTime(prev => prev + delta);
 
-    // Actualizar efectos visuales
+    switch (config.type) {
+      case 'moving':
+        handleMovingPlatform(delta);
+        break;
+      case 'rotating':
+        handleRotatingPlatform(delta);
+        break;
+      case 'oscillating':
+        handleOscillatingPlatform(delta);
+        break;
+      case 'bounce':
+        handleBouncePlatform();
+        break;
+      default:
+        break;
+    }
+  });
+
+  const handleMovingPlatform = useCallback((delta) => {
+    if (!config.movement) return;
+
+    const { path, speed, loop } = config.movement;
+    if (!path || path.length < 2) return;
+
+    const totalDistance = calculatePathLength(path);
+    const travelDistance = (animationTime * speed) % (loop ? totalDistance : totalDistance * 2);
+
+    let targetPosition;
+    if (loop || travelDistance <= totalDistance) {
+      targetPosition = getPositionOnPath(path, travelDistance / totalDistance);
+    } else {
+      // Ping-pong movement
+      const reverseProgress = 1 - ((travelDistance - totalDistance) / totalDistance);
+      targetPosition = getPositionOnPath(path, reverseProgress);
+    }
+
+    // Smooth movement
+    setCurrentPosition(prev => ({
+      x: MathUtils.lerp(prev.x, targetPosition.x, 5 * delta),
+      y: MathUtils.lerp(prev.y, targetPosition.y, 5 * delta),
+      z: MathUtils.lerp(prev.z, targetPosition.z, 5 * delta)
+    }));
+
+    rigidBodyRef.current.setTranslation(currentPosition, true);
+  }, [config.movement, animationTime, currentPosition]);
+
+  const handleRotatingPlatform = useCallback((delta) => {
+    if (!config.rotation) return;
+
+    const { axis, speed } = config.rotation;
+    const rotation = meshRef.current.rotation;
+
+    switch (axis) {
+      case 'x':
+        rotation.x += speed * delta;
+        break;
+      case 'y':
+        rotation.y += speed * delta;
+        break;
+      case 'z':
+        rotation.z += speed * delta;
+        break;
+    }
+  }, [config.rotation]);
+
+  const handleOscillatingPlatform = useCallback((delta) => {
+    if (!config.oscillation) return;
+
+    const { amplitude, frequency, axis } = config.oscillation;
+    const offset = Math.sin(animationTime * frequency) * amplitude;
+
+    const basePosition = config.position;
+    const newPosition = { ...basePosition };
+    newPosition[axis] = basePosition[axis] + offset;
+
+    setCurrentPosition(newPosition);
+    rigidBodyRef.current.setTranslation(newPosition, true);
+  }, [config.oscillation, config.position, animationTime]);
+
+  const handleBouncePlatform = useCallback(() => {
+    // Bounce effect will be triggered by collision
+  }, []);
+
+  // ========================================
+  // 💥 COLLISION HANDLING
+  // ========================================
+
+  const handleCollisionEnter = useCallback((event) => {
+    const { other } = event;
+
+    if (other.rigidBodyObject?.userData?.type === 'player') {
+      handlePlayerCollision(other.rigidBodyObject);
+    }
+  }, []);
+
+  const handlePlayerCollision = useCallback((playerObject) => {
+    const soundVolume = settings.audio.sfxVolume;
+
+    switch (config.type) {
+      case 'breakable':
+        handleBreakablePlatform(playerObject);
+        break;
+      case 'bounce':
+        handleBouncePlatformCollision(playerObject);
+        break;
+      case 'ice':
+        handleIcePlatform(playerObject);
+        break;
+      case 'fire':
+        handleFirePlatform(playerObject);
+        break;
+      case 'checkpoint':
+        handleCheckpointPlatform(playerObject);
+        break;
+      default:
+        // Standard platform sound
+        playSound('step', { volume: soundVolume * 0.3 });
+        break;
+    }
+
+    onInteraction?.({
+      type: 'collision',
+      platform: config,
+      player: playerObject
+    });
+  }, [config, settings, playSound, onInteraction]);
+
+  const handleBreakablePlatform = useCallback((playerObject) => {
+    if (!isActive) return;
+
+    const playerVelocity = playerObject.linvel();
+    const impactForce = Math.abs(playerVelocity.y);
+
+    if (impactForce > 3) { // Threshold for breaking
+      setIsActive(false);
+      playSound('platform_break', { volume: settings.audio.sfxVolume });
+
+      // Start break animation
+      setTimeout(() => {
+        if (rigidBodyRef.current) {
+          rigidBodyRef.current.setTranslation({ x: 0, y: -100, z: 0 }, true);
+        }
+      }, 500);
+
+      // Respawn platform after delay
+      setTimeout(() => {
+        setIsActive(true);
+        rigidBodyRef.current?.setTranslation(config.position, true);
+      }, config.respawnTime || 5000);
+    }
+  }, [isActive, config, playSound, settings]);
+
+  const handleBouncePlatformCollision = useCallback((playerObject) => {
+    const bounceForce = config.bounceForce || 15;
+    playSound('bounce', { volume: settings.audio.sfxVolume });
+
+    // Apply upward force to player
+    playerObject.setLinvel({
+      x: playerObject.linvel().x,
+      y: bounceForce,
+      z: playerObject.linvel().z
+    }, true);
+
+    // Platform bounce animation
     if (meshRef.current) {
-      // Efecto de pulsación para plataformas de energía
-      if (material === 'energy') {
-        const pulse = 1 + Math.sin(Date.now() * 0.005) * 0.1;
-        meshRef.current.scale.y = pulse;
-      }
+      const originalScale = meshRef.current.scale.clone();
+      meshRef.current.scale.y *= 0.7;
 
-      // Efecto de temblor para plataformas que van a caer
-      if (type === 'falling' && platformState.triggered && !platformState.falling) {
-        const shake = Math.sin(Date.now() * 0.02) * 0.02;
-        meshRef.current.position.x = originalPosition[0] + shake;
-      }
+      setTimeout(() => {
+        if (meshRef.current) {
+          meshRef.current.scale.copy(originalScale);
+        }
+      }, 200);
     }
-  });
+  }, [config.bounceForce, playSound, settings]);
+
+  const handleIcePlatform = useCallback((playerObject) => {
+    playSound('ice_step', { volume: settings.audio.sfxVolume * 0.5 });
+
+    // Reduce friction for slippery effect
+    // This would need to be implemented in the physics system
+    onInteraction?.({
+      type: 'ice_effect',
+      duration: 1000,
+      player: playerObject
+    });
+  }, [playSound, settings, onInteraction]);
+
+  const handleFirePlatform = useCallback((playerObject) => {
+    playSound('fire_damage', { volume: settings.audio.sfxVolume });
+
+    // Damage player
+    onInteraction?.({
+      type: 'damage',
+      amount: 10,
+      element: 'fire',
+      player: playerObject
+    });
+  }, [playSound, settings, onInteraction]);
+
+  const handleCheckpointPlatform = useCallback((playerObject) => {
+    playSound('checkpoint', { volume: settings.audio.sfxVolume });
+
+    onInteraction?.({
+      type: 'checkpoint',
+      position: config.position,
+      player: playerObject
+    });
+  }, [playSound, settings, config.position, onInteraction]);
 
   // ========================================
-  // 🎨 RENDER
+  // 🎨 PLATFORM RENDERING
   // ========================================
 
-  return (
-    <group ref={platformRef}>
-      {/* Cuerpo principal de la plataforma */}
-      <mesh
-        ref={meshRef}
-        castShadow
-        receiveShadow
-        visible={type !== 'disappearing' || platformState.visible}
-      >
-        <boxGeometry args={size} />
-        {getPlatformMaterial()}
-      </mesh>
-
-      {/* Efectos especiales según el tipo */}
-      {type === 'moving' && material === 'crystal' && (
-        <CrystalEffects size={size} />
-      )}
-
-      {type === 'rotating' && (
-        <RotatingEffects size={size} />
-      )}
-
-      {type === 'falling' && platformState.triggered && !platformState.falling && (
-        <FallingWarningEffects size={size} />
-      )}
-
-      {type === 'disappearing' && (
-        <DisappearingEffects
-          size={size}
-          visible={platformState.visible}
-          timer={platformState.timer}
-          config={timer}
-        />
-      )}
-
-      {/* Indicadores de debug */}
-      {import.meta.env.DEV && (
-        <DebugIndicators
-          type={type}
-          size={size}
-          isPlayerOn={isPlayerOnPlatform}
-          state={platformState}
-        />
-      )}
-
-      {/* Física invisible */}
-      <mesh ref={ref} visible={false}>
-        <boxGeometry args={size} />
-      </mesh>
-    </group>
-  );
-}
-
-// ========================================
-// ✨ EFECTOS ESPECIALES
-// ========================================
-
-function CrystalEffects({ size }) {
-  const particlesRef = useRef();
-
-  useFrame((state) => {
-    if (particlesRef.current) {
-      particlesRef.current.rotation.y = state.clock.elapsedTime * 0.5;
-    }
-  });
-
-  return (
-    <group ref={particlesRef}>
-      {[...Array(8)].map((_, i) => (
-        <mesh
-          key={i}
-          position={[
-            (Math.random() - 0.5) * size[0],
-            size[1] / 2 + 0.2,
-            (Math.random() - 0.5) * size[2]
-          ]}
-        >
-          <sphereGeometry args={[0.05, 8, 8]} />
-          <meshBasicMaterial
-            color="#e0e0ff"
+  const getMaterial = useCallback(() => {
+    switch (config.type) {
+      case 'ice':
+        return (
+          <meshStandardMaterial
+            color={0x87ceeb}
+            metalness={0.1}
+            roughness={0.1}
             transparent
-            opacity={0.6}
+            opacity={0.8}
           />
-        </mesh>
-      ))}
-    </group>
-  );
-}
+        );
+      case 'fire':
+        return (
+          <meshStandardMaterial
+            color={0xff4500}
+            metalness={0.0}
+            roughness={0.8}
+            emissive={0x441100}
+          />
+        );
+      case 'bounce':
+        return (
+          <meshStandardMaterial
+            color={0xff69b4}
+            metalness={0.2}
+            roughness={0.6}
+          />
+        );
+      case 'breakable':
+        return (
+          <meshStandardMaterial
+            color={isActive ? 0x8b4513 : 0x654321}
+            metalness={0.0}
+            roughness={0.9}
+            opacity={isActive ? 1.0 : 0.5}
+            transparent={!isActive}
+          />
+        );
+      case 'checkpoint':
+        return (
+          <meshStandardMaterial
+            color={0x00ff00}
+            metalness={0.3}
+            roughness={0.5}
+            emissive={0x002200}
+          />
+        );
+      default:
+        return (
+          <meshStandardMaterial
+            color={config.color || 0x888888}
+            metalness={0.1}
+            roughness={0.8}
+          />
+        );
+    }
+  }, [config.type, config.color, isActive]);
 
-function RotatingEffects({ size }) {
+  const getGeometry = useCallback(() => {
+    switch (config.shape || 'box') {
+      case 'cylinder':
+        return <cylinderGeometry args={[config.size.x, config.size.x, config.size.y, 16]} />;
+      case 'sphere':
+        return <sphereGeometry args={[config.size.x, 16, 16]} />;
+      default:
+        return <boxGeometry args={[config.size.x, config.size.y, config.size.z]} />;
+    }
+  }, [config.shape, config.size]);
+
+  if (!isActive && config.type === 'breakable') {
+    return null; // Hide broken platforms
+  }
+
   return (
     <group>
-      {/* Indicadores de rotación */}
-      {[...Array(4)].map((_, i) => (
-        <mesh
-          key={i}
-          position={[
-            (i % 2 === 0 ? 1 : -1) * size[0] / 2,
-            size[1] / 2 + 0.1,
-            (i < 2 ? 1 : -1) * size[2] / 2
-          ]}
-        >
-          <cylinderGeometry args={[0.1, 0.1, 0.3, 8]} />
-          <meshBasicMaterial color="#ffff00" />
+      <RigidBody
+        ref={rigidBodyRef}
+        type={config.type === 'moving' || config.type === 'oscillating' ? 'kinematicPosition' : 'fixed'}
+        position={[currentPosition.x, currentPosition.y, currentPosition.z]}
+        colliders={false}
+        onCollisionEnter={handleCollisionEnter}
+        userData={{
+          type: 'platform',
+          platformType: config.type,
+          id: config.id
+        }}
+      >
+        <CuboidCollider args={[config.size.x / 2, config.size.y / 2, config.size.z / 2]} />
+
+        <mesh ref={meshRef} castShadow receiveShadow>
+          {getGeometry()}
+          {getMaterial()}
         </mesh>
-      ))}
+
+        {/* Platform Effects */}
+        <PlatformEffects type={config.type} isActive={isActive} size={config.size} />
+      </RigidBody>
     </group>
   );
 }
 
-function FallingWarningEffects({ size }) {
-  const warningRef = useRef();
+// ========================================
+// ✨ EFECTOS DE PLATAFORMA
+// ========================================
 
-  useFrame(() => {
-    if (warningRef.current) {
-      const intensity = Math.sin(Date.now() * 0.01);
-      warningRef.current.material.emissiveIntensity = Math.abs(intensity) * 0.5;
-    }
-  });
-
-  return (
-    <mesh ref={warningRef} position={[0, size[1] / 2 + 0.01, 0]}>
-      <boxGeometry args={[size[0], 0.02, size[2]]} />
-      <meshStandardMaterial
-        color="#ff4444"
-        emissive="#ff0000"
-        emissiveIntensity={0.3}
-      />
-    </mesh>
-  );
-}
-
-function DisappearingEffects({ size, visible, timer, config }) {
+function PlatformEffects({ type, isActive, size }) {
   const effectRef = useRef();
 
-  useFrame(() => {
-    if (effectRef.current && config) {
-      const cycle = config.visible + config.hidden;
-      const cyclePosition = timer % cycle;
+  useFrame((state) => {
+    if (!effectRef.current) return;
 
-      if (visible && cyclePosition > config.visible - 1) {
-        // Advertencia antes de desaparecer
-        const warning = Math.sin((cyclePosition - (config.visible - 1)) * 10);
-        effectRef.current.material.opacity = 0.3 + Math.abs(warning) * 0.4;
-      } else {
-        effectRef.current.material.opacity = visible ? 0.7 : 0.1;
-      }
+    const time = state.clock.elapsedTime;
+
+    switch (type) {
+      case 'fire':
+        // Fire particle effect
+        effectRef.current.position.y = size.y / 2 + 0.2 + Math.sin(time * 5) * 0.1;
+        effectRef.current.rotation.y = time * 2;
+        break;
+      case 'ice':
+        // Ice crystal effect
+        effectRef.current.rotation.y = time * 0.5;
+        effectRef.current.scale.setScalar(1 + Math.sin(time * 3) * 0.1);
+        break;
+      case 'bounce':
+        // Bounce spring effect
+        effectRef.current.scale.y = 1 + Math.sin(time * 4) * 0.2;
+        break;
+      case 'checkpoint':
+        // Checkpoint glow effect
+        effectRef.current.rotation.y = time;
+        effectRef.current.position.y = size.y / 2 + 0.5 + Math.sin(time * 2) * 0.2;
+        break;
     }
   });
 
+  if (!isActive) return null;
+
   return (
-    <mesh ref={effectRef} position={[0, size[1] / 2 + 0.05, 0]}>
-      <boxGeometry args={[size[0] * 1.1, 0.1, size[2] * 1.1]} />
-      <meshBasicMaterial
-        color="#00ffff"
-        transparent
-        opacity={0.7}
-      />
-    </mesh>
-  );
-}
-
-// ========================================
-// 🔍 INDICADORES DE DEBUG
-// ========================================
-
-function DebugIndicators({ type, size, isPlayerOn, state }) {
-  return (
-    <group>
-      {/* Wireframe del collider */}
-      <mesh>
-        <boxGeometry args={size} />
-        <meshBasicMaterial
-          color={isPlayerOn ? "#00ff00" : "#ffffff"}
-          wireframe
-          transparent
-          opacity={0.3}
-        />
-      </mesh>
-
-      {/* Información del estado */}
-      <mesh position={[0, size[1] / 2 + 1, 0]}>
-        <planeGeometry args={[2, 0.5]} />
-        <meshBasicMaterial color="#000000" transparent opacity={0.7} />
-      </mesh>
-
-      {/* Aquí podrías agregar texto con información del estado */}
+    <group ref={effectRef}>
+      {type === 'fire' && (
+        <FireEffect size={size} />
+      )}
+      {type === 'ice' && (
+        <IceEffect size={size} />
+      )}
+      {type === 'bounce' && (
+        <BounceEffect size={size} />
+      )}
+      {type === 'checkpoint' && (
+        <CheckpointEffect size={size} />
+      )}
     </group>
   );
 }
 
-export default PlatformManager;
+// ========================================
+// 🔥 EFECTO DE FUEGO
+// ========================================
+
+function FireEffect({ size }) {
+  const particlesRef = useRef();
+  const particleCount = 30;
+  const positions = useMemo(() => new Float32Array(particleCount * 3), []);
+  const velocities = useMemo(() => new Float32Array(particleCount * 3), []);
+  const lifetimes = useMemo(() => new Float32Array(particleCount), []);
+
+  useEffect(() => {
+    // Initialize particles
+    for (let i = 0; i < particleCount; i++) {
+      const i3 = i * 3;
+      positions[i3] = MathUtils.randomFloat(-size.x / 2, size.x / 2);
+      positions[i3 + 1] = 0;
+      positions[i3 + 2] = MathUtils.randomFloat(-size.z / 2, size.z / 2);
+
+      velocities[i3] = MathUtils.randomFloat(-0.5, 0.5);
+      velocities[i3 + 1] = MathUtils.randomFloat(1, 3);
+      velocities[i3 + 2] = MathUtils.randomFloat(-0.5, 0.5);
+
+      lifetimes[i] = MathUtils.randomFloat(0.5, 2);
+    }
+  }, [size, positions, velocities, lifetimes]);
+
+  useFrame((state, delta) => {
+    if (!particlesRef.current) return;
+
+    for (let i = 0; i < particleCount; i++) {
+      const i3 = i * 3;
+
+      lifetimes[i] -= delta;
+
+      if (lifetimes[i] <= 0) {
+        // Reset particle
+        positions[i3] = MathUtils.randomFloat(-size.x / 2, size.x / 2);
+        positions[i3 + 1] = 0;
+        positions[i3 + 2] = MathUtils.randomFloat(-size.z / 2, size.z / 2);
+
+        velocities[i3] = MathUtils.randomFloat(-0.5, 0.5);
+        velocities[i3 + 1] = MathUtils.randomFloat(1, 3);
+        velocities[i3 + 2] = MathUtils.randomFloat(-0.5, 0.5);
+
+        lifetimes[i] = MathUtils.randomFloat(0.5, 2);
+      } else {
+        // Update particle
+        positions[i3] += velocities[i3] * delta;
+        positions[i3 + 1] += velocities[i3 + 1] * delta;
+        positions[i3 + 2] += velocities[i3 + 2] * delta;
+
+        // Apply some turbulence
+        velocities[i3] += MathUtils.randomFloat(-0.1, 0.1) * delta;
+        velocities[i3 + 2] += MathUtils.randomFloat(-0.1, 0.1) * delta;
+      }
+    }
+
+    particlesRef.current.geometry.attributes.position.needsUpdate = true;
+  });
+
+  return (
+    <points ref={particlesRef} position={[0, size.y / 2, 0]}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          array={positions}
+          count={particleCount}
+          itemSize={3}
+        />
+      </bufferGeometry>
+      <pointsMaterial
+        size={0.1}
+        color={0xff4500}
+        transparent
+        opacity={0.8}
+        blending={THREE.AdditiveBlending}
+      />
+    </points>
+  );
+}
+
+// ========================================
+// ❄️ EFECTO DE HIELO
+// ========================================
+
+function IceEffect({ size }) {
+  return (
+    <group position={[0, size.y / 2 + 0.1, 0]}>
+      {Array.from({ length: 5 }, (_, i) => (
+        <mesh key={i} position={[
+          MathUtils.randomFloat(-size.x / 3, size.x / 3),
+          MathUtils.randomFloat(0, 0.3),
+          MathUtils.randomFloat(-size.z / 3, size.z / 3)
+        ]}>
+          <coneGeometry args={[0.05, 0.2, 6]} />
+          <meshStandardMaterial
+            color={0x87ceeb}
+            transparent
+            opacity={0.7}
+            metalness={0.1}
+            roughness={0.1}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// ========================================
+// 🌸 EFECTO DE REBOTE
+// ========================================
+
+function BounceEffect({ size }) {
+  return (
+    <group position={[0, -size.y / 2 - 0.1, 0]}>
+      <mesh>
+        <cylinderGeometry args={[size.x * 0.4, size.x * 0.6, 0.2, 8]} />
+        <meshStandardMaterial
+          color={0xff69b4}
+          metalness={0.2}
+          roughness={0.6}
+          transparent
+          opacity={0.6}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+// ========================================
+// ⭐ EFECTO DE CHECKPOINT
+// ========================================
+
+function CheckpointEffect({ size }) {
+  return (
+    <group>
+      <mesh>
+        <torusGeometry args={[size.x * 0.8, 0.1, 8, 16]} />
+        <meshBasicMaterial
+          color={0x00ff00}
+          transparent
+          opacity={0.6}
+        />
+      </mesh>
+      <mesh position={[0, 0.3, 0]}>
+        <sphereGeometry args={[0.2, 8, 8]} />
+        <meshBasicMaterial
+          color={0x00ff00}
+          transparent
+          opacity={0.8}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+// ========================================
+// 🛠️ UTILITY FUNCTIONS
+// ========================================
+
+function generateProceduralPlatforms(level) {
+  const platforms = [];
+  const platformCount = Math.min(10 + level * 2, 30);
+
+  // Starting platform
+  platforms.push({
+    id: 'start',
+    position: { x: 0, y: 0, z: 0 },
+    size: { x: 4, y: 0.5, z: 4 },
+    type: 'static',
+    color: 0x00ff00
+  });
+
+  for (let i = 1; i < platformCount; i++) {
+    const distance = i * MathUtils.randomFloat(3, 6);
+    const angle = (i / platformCount) * Math.PI * 2 + MathUtils.randomFloat(-0.5, 0.5);
+
+    const x = Math.cos(angle) * distance;
+    const z = Math.sin(angle) * distance;
+    const y = MathUtils.randomFloat(0, level * 2);
+
+    const platformType = getPlatformType(level, i);
+
+    platforms.push({
+      id: `platform-${i}`,
+      position: { x, y, z },
+      size: {
+        x: MathUtils.randomFloat(1.5, 3),
+        y: 0.5,
+        z: MathUtils.randomFloat(1.5, 3)
+      },
+      type: platformType,
+      ...getPlatformTypeConfig(platformType)
+    });
+  }
+
+  return platforms;
+}
+
+function getPlatformType(level, index) {
+  const rand = Math.random();
+
+  if (index % 10 === 0) return 'checkpoint';
+  if (level > 2 && rand < 0.1) return 'fire';
+  if (level > 1 && rand < 0.15) return 'ice';
+  if (rand < 0.2) return 'bounce';
+  if (level > 3 && rand < 0.1) return 'breakable';
+  if (rand < 0.3) return 'moving';
+
+  return 'static';
+}
+
+function getPlatformTypeConfig(type) {
+  switch (type) {
+    case 'moving':
+      return {
+        movement: {
+          path: [
+            { x: 0, y: 0, z: 0 },
+            { x: MathUtils.randomFloat(-3, 3), y: MathUtils.randomFloat(-1, 1), z: MathUtils.randomFloat(-3, 3) }
+          ],
+          speed: MathUtils.randomFloat(1, 3),
+          loop: false
+        }
+      };
+    case 'bounce':
+      return {
+        bounceForce: 15,
+        color: 0xff69b4
+      };
+    case 'fire':
+      return {
+        color: 0xff4500
+      };
+    case 'ice':
+      return {
+        color: 0x87ceeb
+      };
+    case 'breakable':
+      return {
+        respawnTime: 5000,
+        color: 0x8b4513
+      };
+    default:
+      return {};
+  }
+}
+
+function calculatePathLength(path) {
+  let length = 0;
+  for (let i = 1; i < path.length; i++) {
+    length += VectorUtils.distance(path[i - 1], path[i]);
+  }
+  return length;
+}
+
+function getPositionOnPath(path, progress) {
+  if (path.length < 2) return path[0] || { x: 0, y: 0, z: 0 };
+
+  const totalLength = calculatePathLength(path);
+  const targetDistance = progress * totalLength;
+
+  let currentDistance = 0;
+
+  for (let i = 1; i < path.length; i++) {
+    const segmentLength = VectorUtils.distance(path[i - 1], path[i]);
+
+    if (currentDistance + segmentLength >= targetDistance) {
+      const segmentProgress = (targetDistance - currentDistance) / segmentLength;
+      return VectorUtils.lerp(path[i - 1], path[i], segmentProgress);
+    }
+
+    currentDistance += segmentLength;
+  }
+
+  return path[path.length - 1];
+}
+
+export default Platforms;

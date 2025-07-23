@@ -1,673 +1,823 @@
 /* ============================================================================ */
-/* 🎮 CRASH WORM 3D - MUNDO DEL JUEGO */
+/* 🎮 CRASH WORM 3D - MUNDO DEL JUEGO INTEGRADO */
 /* ============================================================================ */
+/* Ubicación: src/components/GameWorld.jsx */
 
-import React, { useRef, useEffect, useState, Suspense } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import React, { useRef, useEffect, useState, useCallback, useMemo, Suspense } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import {
+  OrbitControls,
   Environment,
   Sky,
   ContactShadows,
-  OrbitControls,
   PerspectiveCamera,
-  Lightformer,
-  Float
+  Stats
 } from '@react-three/drei';
-import { Physics, RigidBody } from '@react-three/rapier';
+import { Physics, Debug } from '@react-three/rapier';
 import * as THREE from 'three';
 
-import { useGame } from '@/context/GameContext';
-import { gameConfig } from '@/data/gameConfig';
-import useGameEngine from '@/hooks/useGameEngine';
-import useAudioManager from '@/hooks/useAudioManager';
-
-// Componentes del juego
+// Game Components
 import Player from './Player';
-import EnemyManager from './Enemies';
-import CollectibleManager from './Collectibles';
-import PlatformManager from './Platforms';
-import ParticleEffectsManager from './ParticleEffects';
+import Platforms from './Platforms';
+import Collectibles from './Collectibles';
+import Enemies from './Enemies';
+import ParticleEffects, { useParticleEffects } from './ParticleEffects';
+
+// Context and Hooks
+import { useGameContext } from '../context/GameContext';
+import { useGameEngine } from '../hooks/useGameEngine';
+import { useAudioManager } from '../hooks/useAudioManager';
+import { useNetworkSync } from '../hooks/useNetworkSync';
+
+// Utils and Config
+import { gameConfig } from '../data/gameConfig';
+import { DeviceUtils, MathUtils, GameUtils } from '../utils/gameUtils';
 
 // ========================================
 // 🌍 COMPONENTE PRINCIPAL DEL MUNDO
 // ========================================
 
 export function GameWorld() {
-  const { state, actions, utils } = useGame();
-  const { camera, scene, gl } = useThree();
-  const { playMusic, playSound } = useAudioManager();
   const {
-    engine,
-    isInitialized: isEngineReady,
-    startEngine,
-    createEntity,
-    addComponent
-  } = useGameEngine();
+    gameState,
+    currentLevel,
+    mode,
+    settings,
+    player,
+    room,
+    updatePerformance,
+    setPlayerPosition,
+    showNotification
+  } = useGameContext();
 
-  // Referencias principales
-  const worldRef = useRef();
-  const playerRef = useRef();
-  const cameraRigRef = useRef();
-  const lightingRef = useRef();
+  const { playMusic, playAmbient } = useAudioManager();
+  const { isConnected, syncPlayerState } = useNetworkSync();
 
-  // Estado del mundo
-  const [isWorldReady, setIsWorldReady] = useState(false);
-  const [currentLevelData, setCurrentLevelData] = useState(null);
-  const [ambientSettings, setAmbientSettings] = useState({
-    timeOfDay: 'day',
-    weather: 'clear',
-    atmosphere: 'normal'
-  });
+  // World state
+  const [worldData, setWorldData] = useState(null);
+  const [isWorldLoaded, setIsWorldLoaded] = useState(false);
+  const [cameraMode, setCameraMode] = useState('follow'); // follow, free, cinematic
 
-  // ========================================
-  // 🚀 INICIALIZACIÓN DEL MUNDO
-  // ========================================
-
+  // Load world data based on current level
   useEffect(() => {
-    const initializeWorld = async () => {
-      if (!isEngineReady) return;
+    loadWorldData(currentLevel).then(data => {
+      setWorldData(data);
+      setIsWorldLoaded(true);
 
-      try {
-        // Inicializar sistemas del mundo
-        await setupWorldSystems();
-
-        // Cargar datos del nivel
-        const levelData = await loadLevelData(state.level);
-        setCurrentLevelData(levelData);
-
-        // Configurar escena 3D
-        setupScene();
-
-        // Iniciar música de gameplay
-        playMusic('/audio/gameplay-music.mp3', {
-          loop: true,
-          volume: 0.4
-        });
-
-        // Iniciar el motor del juego
-        startEngine();
-
-        setIsWorldReady(true);
-        console.log('🌍 Game world initialized successfully');
-
-      } catch (error) {
-        console.error('❌ Failed to initialize world:', error);
-      }
-    };
-
-    initializeWorld();
-  }, [isEngineReady, state.level, startEngine, playMusic]);
-
-  // ========================================
-  // ⚙️ CONFIGURACIÓN DE SISTEMAS
-  // ========================================
-
-  const setupWorldSystems = async () => {
-    const gameEngine = engine();
-    if (!gameEngine) return;
-
-    // Crear entidad del mundo
-    const worldEntityId = createEntity('world');
-
-    // Agregar componentes del mundo
-    addComponent(worldEntityId, 'transform', {
-      position: { x: 0, y: 0, z: 0 },
-      rotation: { x: 0, y: 0, z: 0 },
-      scale: { x: 1, y: 1, z: 1 }
+      // Start appropriate music
+      const theme = data.theme || 'forest';
+      playMusic(gameConfig.levels.themes[theme]?.music || 'gameplay');
+      playAmbient(gameConfig.levels.themes[theme]?.ambient || 'forest');
     });
+  }, [currentLevel, playMusic, playAmbient]);
 
-    // Sistema de cámara
-    addComponent(worldEntityId, 'camera', {
-      target: playerRef,
-      offset: { x: 0, y: 5, z: 8 },
-      smoothing: 0.1,
-      bounds: gameConfig.world.worldBounds
-    });
+  // Performance monitoring
+  useEffect(() => {
+    const interval = setInterval(() => {
+      updatePerformance({
+        memoryUsage: (performance.memory?.usedJSHeapSize || 0) / 1024 / 1024,
+        timestamp: Date.now()
+      });
+    }, 1000);
 
-    // Sistema de iluminación
-    addComponent(worldEntityId, 'lighting', {
-      ambientIntensity: 0.4,
-      directionalIntensity: 1.0,
-      shadowsEnabled: true
-    });
-  };
+    return () => clearInterval(interval);
+  }, [updatePerformance]);
 
-  const loadLevelData = async (levelNumber) => {
-    // En un juego real, esto cargaría desde archivos JSON o API
-    const levelData = {
-      id: levelNumber,
-      name: `Level ${levelNumber}`,
-      theme: getLevelTheme(levelNumber),
-
-      // Spawn del jugador
-      playerSpawn: { x: 0, y: 3, z: 0 },
-
-      // Objetivo del nivel
-      objective: {
-        type: 'collect_all',
-        description: 'Collect all gems and reach the exit',
-        target: 10
-      },
-
-      // Configuración de plataformas
-      platforms: generateLevelPlatforms(levelNumber),
-
-      // Configuración de enemigos
-      enemies: generateLevelEnemies(levelNumber),
-
-      // Configuración de coleccionables
-      collectibles: generateLevelCollectibles(levelNumber),
-
-      // Configuración ambiental
-      environment: {
-        skybox: 'day',
-        lighting: 'bright',
-        atmosphere: 'clear',
-        backgroundMusic: 'level-theme'
-      }
-    };
-
-    return levelData;
-  };
-
-  const setupScene = () => {
-    // Configurar renderer
-    gl.shadowMap.enabled = true;
-    gl.shadowMap.type = THREE.PCFSoftShadowMap;
-    gl.outputColorSpace = THREE.SRGBColorSpace;
-    gl.toneMapping = THREE.ACESFilmicToneMapping;
-    gl.toneMappingExposure = 1.0;
-
-    // Configurar escena
-    scene.fog = new THREE.Fog('#87CEEB', 50, 200);
-  };
-
-  // ========================================
-  // 🎮 LÓGICA DEL JUEGO
-  // ========================================
-
-  useFrame((_, deltaTime) => {
-    if (!isWorldReady || !utils.isPlaying) return;
-
-    // Actualizar sistemas del mundo
-    updateCameraSystem(deltaTime);
-    updateAmbientSystems(deltaTime);
-    updateGameLogic(deltaTime);
-  });
-
-  const updateCameraSystem = (deltaTime) => {
-    if (!playerRef.current || !cameraRigRef.current) return;
-
-    const playerPosition = playerRef.current.translation();
-    const targetPosition = new THREE.Vector3(
-      playerPosition.x,
-      playerPosition.y + 5,
-      playerPosition.z + 10
-    );
-
-    // Smooth camera follow
-    cameraRigRef.current.position.lerp(targetPosition, deltaTime * 2);
-    cameraRigRef.current.lookAt(
-      playerPosition.x,
-      playerPosition.y + 1,
-      playerPosition.z
-    );
-  };
-
-  const updateAmbientSystems = (deltaTime) => {
-    // Actualizar efectos ambientales
-    if (lightingRef.current) {
-      const time = Date.now() * 0.0005;
-      lightingRef.current.intensity = 0.8 + Math.sin(time) * 0.1;
-    }
-  };
-
-  const updateGameLogic = (deltaTime) => {
-    // Verificar condiciones de victoria/derrota
-    checkWinConditions();
-    checkLoseConditions();
-
-    // Actualizar estadísticas del juego
-    actions.updateTime(state.timeElapsed + deltaTime);
-  };
-
-  const checkWinConditions = () => {
-    if (!currentLevelData) return;
-
-    // Verificar si se completaron todos los objetivos
-    const allCollectiblesCollected = state.collectibles >= state.totalCollectibles;
-    const playerAtExit = false; // Se implementaría la detección de zona de salida
-
-    if (allCollectiblesCollected && playerAtExit) {
-      actions.victory();
-      playSound('victory');
-    }
-  };
-
-  const checkLoseConditions = () => {
-    if (state.health <= 0 && state.lives <= 0) {
-      actions.gameOver();
-      playSound('gameOver');
-    }
-  };
-
-  // ========================================
-  // 🎨 RENDER DEL MUNDO
-  // ========================================
-
-  if (!isWorldReady || !currentLevelData) {
-    return <WorldLoadingScreen />;
+  if (!isWorldLoaded || !worldData) {
+    return <WorldLoadingFallback />;
   }
 
   return (
-    <group ref={worldRef}>
-      {/* Sistema de Física */}
-      <Physics gravity={[0, gameConfig.world.gravity, 0]} debug={import.meta.env.DEV}>
-
-        {/* Configuración de Cámara */}
-        <CameraRig ref={cameraRigRef} />
-
-        {/* Sistema de Iluminación */}
-        <LightingSystem ref={lightingRef} settings={ambientSettings} />
-
-        {/* Entorno y Atmosfera */}
-        <EnvironmentSystem levelData={currentLevelData} />
-
-        {/* Jugador */}
-        <Suspense fallback={<PlayerPlaceholder />}>
-          <Player
-            ref={playerRef}
-            position={currentLevelData.playerSpawn}
+    <div className="game-canvas-container">
+      <Canvas
+        shadows
+        camera={{ fov: 75, near: 0.1, far: 1000, position: [0, 5, 10] }}
+        gl={{
+          antialias: settings.graphics.antialiasing,
+          powerPreference: 'high-performance',
+          alpha: false
+        }}
+        dpr={[1, settings.graphics.quality === 'ultra' ? 2 : 1.5]}
+      >
+        <Suspense fallback={<WorldLoadingFallback />}>
+          <GameScene
+            worldData={worldData}
+            cameraMode={cameraMode}
+            onCameraModeChange={setCameraMode}
           />
         </Suspense>
-
-        {/* Elementos del Nivel */}
-        <LevelElements levelData={currentLevelData} playerRef={playerRef} />
-
-        {/* Efectos y Partículas */}
-        <ParticleEffectsManager />
-
-        {/* Geometría del Terreno */}
-        <TerrainGeometry levelData={currentLevelData} />
-
-        {/* Colisores Invisibles */}
-        <WorldBoundaries />
-
-      </Physics>
-
-      {/* Elementos sin Física */}
-      <SkyboxAndBackground levelData={currentLevelData} />
-
-      {/* Debug Helpers */}
-      {import.meta.env.DEV && <DebugHelpers />}
-    </group>
+      </Canvas>
+    </div>
   );
 }
 
 // ========================================
-// 📹 SISTEMA DE CÁMARA
+// 🎬 ESCENA PRINCIPAL DEL JUEGO
 // ========================================
 
-const CameraRig = React.forwardRef((props, ref) => {
-  return (
-    <group ref={ref}>
-      <PerspectiveCamera
-        makeDefault
-        fov={75}
-        near={0.1}
-        far={1000}
-        position={[0, 5, 10]}
-      />
-    </group>
-  );
-});
+function GameScene({ worldData, cameraMode, onCameraModeChange }) {
+  const { camera, scene, gl } = useThree();
+  const {
+    gameState,
+    settings,
+    player,
+    mode,
+    takeDamage,
+    addScore,
+    showNotification,
+    setPlayerPosition
+  } = useGameContext();
 
-// ========================================
-// 💡 SISTEMA DE ILUMINACIÓN
-// ========================================
+  // Game engine integration
+  const {
+    engine,
+    isInitialized,
+    performance,
+    startEngine,
+    stopEngine,
+    pauseEngine,
+    resumeEngine
+  } = useGameEngine();
 
-const LightingSystem = React.forwardRef(({ settings }, ref) => {
-  return (
-    <group>
-      {/* Luz ambiental */}
-      <ambientLight intensity={0.4} color="#ffffff" />
+  // Particle effects
+  const {
+    effects: particleEffects,
+    addEffect,
+    createExplosion,
+    createSparkle,
+    createHeal
+  } = useParticleEffects();
 
-      {/* Luz direccional principal */}
-      <directionalLight
-        ref={ref}
-        position={[10, 20, 5]}
-        intensity={1.0}
-        color="#ffffff"
-        castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-camera-far={50}
-        shadow-camera-left={-20}
-        shadow-camera-right={20}
-        shadow-camera-top={20}
-        shadow-camera-bottom={-20}
-      />
+  // Refs
+  const playerRef = useRef();
+  const lightRef = useRef();
+  const [playerPosition, setPlayerPos] = useState({ x: 0, y: 1, z: 0 });
 
-      {/* Luces de relleno */}
-      <pointLight
-        position={[-10, 10, -10]}
-        intensity={0.3}
-        color="#4488ff"
-        distance={30}
-      />
+  // ========================================
+  // ⚙️ GAME ENGINE INTEGRATION
+  // ========================================
 
-      <pointLight
-        position={[10, 5, 10]}
-        intensity={0.2}
-        color="#ff8844"
-        distance={25}
-      />
+  useEffect(() => {
+    if (isInitialized) {
+      switch (gameState) {
+        case 'PLAYING':
+          startEngine();
+          break;
+        case 'PAUSED':
+          pauseEngine();
+          break;
+        case 'GAME_OVER':
+          stopEngine();
+          break;
+        default:
+          break;
+      }
+    }
+  }, [gameState, isInitialized, startEngine, stopEngine, pauseEngine, resumeEngine]);
 
-      {/* Luz de respaldo */}
-      <hemisphereLight
-        skyColor="#87CEEB"
-        groundColor="#8B4513"
-        intensity={0.2}
-      />
-    </group>
-  );
-});
+  // ========================================
+  // 📹 CAMERA SYSTEM
+  // ========================================
 
-// ========================================
-// 🌍 SISTEMA DE ENTORNO
-// ========================================
+  useFrame((state, delta) => {
+    // Update camera based on mode
+    updateCameraSystem(delta);
 
-function EnvironmentSystem({ levelData }) {
+    // Update lighting
+    updateDynamicLighting(delta);
+
+    // Performance monitoring
+    monitorPerformance(state);
+  });
+
+  const updateCameraSystem = useCallback((delta) => {
+    if (!playerRef.current) return;
+
+    switch (cameraMode) {
+      case 'follow':
+        updateFollowCamera(delta);
+        break;
+      case 'cinematic':
+        updateCinematicCamera(delta);
+        break;
+      case 'free':
+        // Free camera handled by OrbitControls
+        break;
+    }
+  }, [cameraMode]);
+
+  const updateFollowCamera = useCallback((delta) => {
+    const config = gameConfig.player.camera;
+    const targetPos = new THREE.Vector3(
+      playerPosition.x + config.followOffset.x,
+      playerPosition.y + config.followOffset.y,
+      playerPosition.z + config.followOffset.z
+    );
+
+    camera.position.lerp(targetPos, config.followSpeed * delta);
+
+    // Look at player with slight ahead offset
+    const lookAtPos = new THREE.Vector3(
+      playerPosition.x,
+      playerPosition.y + 1,
+      playerPosition.z
+    );
+    camera.lookAt(lookAtPos);
+  }, [playerPosition, camera]);
+
+  const updateCinematicCamera = useCallback((delta) => {
+    // Cinematic camera movement - orbiting around player
+    const time = Date.now() * 0.001;
+    const radius = 15;
+    const height = 8;
+
+    camera.position.x = playerPosition.x + Math.cos(time * 0.3) * radius;
+    camera.position.y = playerPosition.y + height + Math.sin(time * 0.2) * 2;
+    camera.position.z = playerPosition.z + Math.sin(time * 0.3) * radius;
+
+    camera.lookAt(playerPosition.x, playerPosition.y + 2, playerPosition.z);
+  }, [playerPosition, camera]);
+
+  // ========================================
+  // 💡 DYNAMIC LIGHTING
+  // ========================================
+
+  const updateDynamicLighting = useCallback((delta) => {
+    if (!lightRef.current) return;
+
+    // Dynamic sun position
+    const time = Date.now() * 0.0001;
+    const sunAngle = time % (Math.PI * 2);
+
+    lightRef.current.position.x = Math.cos(sunAngle) * 50;
+    lightRef.current.position.y = Math.max(10, Math.sin(sunAngle) * 30 + 20);
+    lightRef.current.position.z = Math.sin(sunAngle) * 50;
+
+    // Adjust light intensity based on time of day
+    const intensity = Math.max(0.3, Math.sin(sunAngle) * 0.7 + 0.5);
+    lightRef.current.intensity = intensity;
+  }, []);
+
+  // ========================================
+  // 📊 PERFORMANCE MONITORING
+  // ========================================
+
+  const monitorPerformance = useCallback((state) => {
+    const fps = 1 / state.clock.getDelta();
+    const frameTime = state.clock.getDelta() * 1000;
+
+    // Update performance stats
+    if (Math.random() < 0.1) { // Update 10% of frames to avoid overhead
+      const renderInfo = gl.info.render;
+
+      updatePerformance({
+        fps: Math.round(fps),
+        frameTime: Math.round(frameTime * 100) / 100,
+        drawCalls: renderInfo.calls,
+        triangles: renderInfo.triangles,
+        geometries: renderInfo.geometries,
+        textures: renderInfo.textures
+      });
+    }
+  }, [gl, updatePerformance]);
+
+  // ========================================
+  // 🎮 GAME EVENT HANDLERS
+  // ========================================
+
+  const handlePlayerPositionChange = useCallback((position) => {
+    setPlayerPos(position);
+    setPlayerPosition(position);
+
+    // Sync with multiplayer if connected
+    if (mode === 'multiplayer') {
+      // syncPlayerState would be called here
+    }
+  }, [setPlayerPosition, mode]);
+
+  const handlePlatformInteraction = useCallback((interaction) => {
+    switch (interaction.type) {
+      case 'ice_effect':
+        showNotification({
+          message: 'Slippery!',
+          type: 'info',
+          icon: '❄️',
+          duration: 1000
+        });
+        break;
+      case 'damage':
+        takeDamage(interaction.amount);
+        createExplosion(interaction.player.translation(), 0.5);
+        break;
+      case 'checkpoint':
+        showNotification({
+          message: 'Checkpoint saved!',
+          type: 'success',
+          icon: '💾',
+          duration: 2000
+        });
+        break;
+    }
+  }, [showNotification, takeDamage, createExplosion]);
+
+  const handleCollectibleCollect = useCallback((collectible) => {
+    // Create particle effect at collection point
+    switch (collectible.type) {
+      case 'coin':
+        createSparkle(collectible.position, 0.8);
+        break;
+      case 'gem':
+        createSparkle(collectible.position, 1.2);
+        break;
+      case 'heart':
+        createHeal(collectible.position, 1.0);
+        break;
+      default:
+        createSparkle(collectible.position, 1.0);
+    }
+  }, [createSparkle, createHeal]);
+
+  const handleEnemyDefeat = useCallback((enemy) => {
+    // Create explosion effect
+    createExplosion(enemy.position, 1.0);
+
+    showNotification({
+      message: `Enemy defeated! +${enemy.scoreValue} points`,
+      type: 'success',
+      icon: '💥',
+      duration: 1500
+    });
+  }, [createExplosion, showNotification]);
+
+  // ========================================
+  // 🎨 WORLD RENDERING
+  // ========================================
+
   return (
     <>
-      {/* Entorno HDR */}
-      <Environment preset="dawn" background={false} />
-
-      {/* Contacto de sombras */}
-      <ContactShadows
-        position={[0, -0.1, 0]}
-        opacity={0.4}
-        scale={50}
-        blur={2}
-        far={20}
+      {/* Lighting Setup */}
+      <LightingRig
+        theme={worldData.theme}
+        lightRef={lightRef}
+        settings={settings}
       />
 
-      {/* Efectos atmosféricos */}
-      <Float speed={1} rotationIntensity={0} floatIntensity={0.2}>
-        <Lightformer
-          position={[0, 5, -10]}
-          scale={[10, 5, 1]}
-          color="#87CEEB"
-          intensity={0.5}
-          form="rect"
+      {/* Environment */}
+      <WorldEnvironment
+        theme={worldData.theme}
+        settings={settings}
+      />
+
+      {/* Physics World */}
+      <Physics
+        gravity={[0, -20, 0]}
+        timeStep={1/60}
+        paused={gameState === 'PAUSED'}
+      >
+        {settings.gameplay.showDebugInfo && (
+          <Debug />
+        )}
+
+        {/* Player */}
+        <Player
+          ref={playerRef}
+          position={worldData.spawnPoint}
+          onPositionChange={handlePlayerPositionChange}
         />
-      </Float>
+
+        {/* Platforms */}
+        <Platforms
+          levelData={worldData}
+          onPlatformInteraction={handlePlatformInteraction}
+        />
+
+        {/* Collectibles */}
+        <Collectibles
+          levelData={worldData}
+          onCollect={handleCollectibleCollect}
+        />
+
+        {/* Enemies */}
+        <Enemies
+          levelData={worldData}
+          playerPosition={playerPosition}
+          onEnemyDefeat={handleEnemyDefeat}
+        />
+
+        {/* Static World Geometry */}
+        <WorldGeometry worldData={worldData} />
+      </Physics>
+
+      {/* Particle Effects */}
+      <ParticleEffects
+        effects={particleEffects}
+        globalEffects={settings.graphics.particles}
+      />
+
+      {/* Camera Controls */}
+      <CameraControls
+        mode={cameraMode}
+        onModeChange={onCameraModeChange}
+        enabled={cameraMode === 'free'}
+      />
+
+      {/* Debug Information */}
+      {settings.gameplay.showDebugInfo && (
+        <>
+          <Stats />
+          <DebugInfo
+            playerPosition={playerPosition}
+            performance={performance}
+            worldData={worldData}
+          />
+        </>
+      )}
     </>
   );
 }
 
 // ========================================
-// 🎮 ELEMENTOS DEL NIVEL
+// 💡 SISTEMA DE ILUMINACIÓN
 // ========================================
 
-function LevelElements({ levelData, playerRef }) {
+function LightingRig({ theme, lightRef, settings }) {
+  const lightingConfig = gameConfig.graphics.lighting;
+
   return (
-    <group>
-      {/* Plataformas */}
-      <Suspense fallback={<div>Loading platforms...</div>}>
-        <PlatformManager levelData={levelData} />
-      </Suspense>
+    <>
+      {/* Ambient Light */}
+      <ambientLight
+        color={lightingConfig.ambient.color}
+        intensity={lightingConfig.ambient.intensity}
+      />
 
-      {/* Enemigos */}
-      <Suspense fallback={<div>Loading enemies...</div>}>
-        <EnemyManager
-          levelData={levelData}
-          playerRef={playerRef}
-        />
-      </Suspense>
+      {/* Directional Light (Sun) */}
+      <directionalLight
+        ref={lightRef}
+        color={lightingConfig.directional.color}
+        intensity={lightingConfig.directional.intensity}
+        position={[
+          lightingConfig.directional.position.x,
+          lightingConfig.directional.position.y,
+          lightingConfig.directional.position.z
+        ]}
+        castShadow={settings.graphics.shadows}
+        shadow-mapSize-width={settings.graphics.shadowMapSize || 2048}
+        shadow-mapSize-height={settings.graphics.shadowMapSize || 2048}
+        shadow-camera-near={lightingConfig.directional.shadowCameraNear}
+        shadow-camera-far={lightingConfig.directional.shadowCameraFar}
+        shadow-camera-left={lightingConfig.directional.shadowCameraLeft}
+        shadow-camera-right={lightingConfig.directional.shadowCameraRight}
+        shadow-camera-top={lightingConfig.directional.shadowCameraTop}
+        shadow-camera-bottom={lightingConfig.directional.shadowCameraBottom}
+      />
 
-      {/* Coleccionables */}
-      <Suspense fallback={<div>Loading collectibles...</div>}>
-        <CollectibleManager
-          levelData={levelData}
-          playerRef={playerRef}
-        />
-      </Suspense>
-    </group>
+      {/* Point Lights for atmosphere */}
+      <pointLight
+        color={lightingConfig.point.color}
+        intensity={lightingConfig.point.intensity}
+        distance={lightingConfig.point.distance}
+        decay={lightingConfig.point.decay}
+        position={[10, 5, 10]}
+      />
+    </>
   );
 }
 
 // ========================================
-// 🗻 GEOMETRÍA DEL TERRENO
+// 🌍 ENTORNO DEL MUNDO
 // ========================================
 
-function TerrainGeometry({ levelData }) {
-  return (
-    <group>
-      {/* Plano base */}
-      <RigidBody type="fixed" colliders="trimesh">
-        <mesh receiveShadow position={[0, -1, 0]}>
-          <boxGeometry args={[200, 2, 200]} />
-          <meshStandardMaterial
-            color="#228B22"
-            roughness={0.8}
-            metalness={0.1}
-          />
-        </mesh>
-      </RigidBody>
-
-      {/* Elementos decorativos del terreno */}
-      <TerrainDecorations theme={levelData.theme} />
-    </group>
-  );
-}
-
-function TerrainDecorations({ theme }) {
-  const decorations = [];
-
-  // Generar decoraciones aleatorias
-  for (let i = 0; i < 20; i++) {
-    const x = (Math.random() - 0.5) * 100;
-    const z = (Math.random() - 0.5) * 100;
-    const scale = 0.5 + Math.random() * 1.5;
-
-    decorations.push(
-      <Float key={i} speed={1 + Math.random()} rotationIntensity={0.1}>
-        <mesh position={[x, 0, z]} scale={scale}>
-          <coneGeometry args={[0.5, 2, 8]} />
-          <meshStandardMaterial color="#2F4F2F" />
-        </mesh>
-      </Float>
-    );
-  }
-
-  return <group>{decorations}</group>;
-}
-
-// ========================================
-// 🚧 LÍMITES DEL MUNDO
-// ========================================
-
-function WorldBoundaries() {
-  const bounds = gameConfig.world.worldBounds;
+function WorldEnvironment({ theme, settings }) {
+  const themeConfig = gameConfig.levels.themes[theme] || gameConfig.levels.themes.forest;
 
   return (
-    <group>
-      {/* Paredes invisibles */}
-      <RigidBody type="fixed" position={[bounds.x.min, 0, 0]}>
-        <mesh visible={false}>
-          <boxGeometry args={[1, 100, 200]} />
-        </mesh>
-      </RigidBody>
-
-      <RigidBody type="fixed" position={[bounds.x.max, 0, 0]}>
-        <mesh visible={false}>
-          <boxGeometry args={[1, 100, 200]} />
-        </mesh>
-      </RigidBody>
-
-      <RigidBody type="fixed" position={[0, 0, bounds.z.min]}>
-        <mesh visible={false}>
-          <boxGeometry args={[200, 100, 1]} />
-        </mesh>
-      </RigidBody>
-
-      <RigidBody type="fixed" position={[0, 0, bounds.z.max]}>
-        <mesh visible={false}>
-          <boxGeometry args={[200, 100, 1]} />
-        </mesh>
-      </RigidBody>
-
-      {/* Suelo de muerte */}
-      <RigidBody type="fixed" position={[0, bounds.y.min, 0]}>
-        <mesh visible={false}>
-          <boxGeometry args={[200, 1, 200]} />
-        </mesh>
-      </RigidBody>
-    </group>
-  );
-}
-
-// ========================================
-// 🌌 SKYBOX Y FONDO
-// ========================================
-
-function SkyboxAndBackground({ levelData }) {
-  return (
-    <group>
+    <>
+      {/* Sky */}
       <Sky
         distance={450000}
-        sunPosition={[10, 20, 30]}
+        sunPosition={[100, 20, 100]}
         inclination={0}
         azimuth={0.25}
-        rayleigh={0.5}
-        turbidity={10}
-        mieCoefficient={0.005}
-        mieDirectionalG={0.7}
       />
-    </group>
-  );
-}
 
-// ========================================
-// 🔄 PANTALLA DE CARGA DEL MUNDO
-// ========================================
+      {/* Environment Map */}
+      <Environment preset="forest" />
 
-function WorldLoadingScreen() {
-  return (
-    <group>
-      <mesh>
-        <boxGeometry args={[2, 2, 2]} />
-        <meshBasicMaterial color="#4488ff" wireframe />
+      {/* Fog */}
+      <fog
+        attach="fog"
+        args={[themeConfig.fogColor, 10, themeConfig.fogDensity * 1000]}
+      />
+
+      {/* Ground Plane */}
+      <mesh receiveShadow position={[0, -0.5, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[200, 200]} />
+        <meshStandardMaterial color={0x567d46} />
       </mesh>
-      <pointLight position={[10, 10, 10]} />
-    </group>
+
+      {/* Contact Shadows */}
+      <ContactShadows
+        position={[0, 0, 0]}
+        opacity={0.4}
+        scale={100}
+        blur={1}
+        far={20}
+      />
+    </>
   );
 }
 
 // ========================================
-// 👤 PLACEHOLDER DEL JUGADOR
+// 🏗️ GEOMETRÍA ESTÁTICA DEL MUNDO
 // ========================================
 
-function PlayerPlaceholder() {
-  return (
-    <mesh position={[0, 1, 0]}>
-      <boxGeometry args={[1, 2, 1]} />
-      <meshBasicMaterial color="#00ff00" wireframe />
-    </mesh>
-  );
-}
-
-// ========================================
-// 🐛 HELPERS DE DEBUG
-// ========================================
-
-function DebugHelpers() {
+function WorldGeometry({ worldData }) {
   return (
     <group>
-      {/* Grid helper */}
-      <gridHelper args={[100, 50, '#444444', '#222222']} />
+      {/* Boundary Walls */}
+      <BoundaryWalls size={worldData.bounds || 50} />
 
-      {/* Axes helper */}
-      <axesHelper args={[5]} />
+      {/* Decorative Elements */}
+      <DecorativeElements theme={worldData.theme} />
 
-      {/* Controles de órbita para debug */}
-      <OrbitControls
-        enabled={false}
-        target={[0, 0, 0]}
-        enablePan={true}
-        enableZoom={true}
-        enableRotate={true}
-      />
+      {/* Background Geometry */}
+      <BackgroundGeometry worldData={worldData} />
+    </group>
+  );
+}
+
+function BoundaryWalls({ size }) {
+  const wallHeight = 10;
+  const wallThickness = 1;
+
+  return (
+    <group>
+      {/* North Wall */}
+      <mesh position={[0, wallHeight / 2, -size]} receiveShadow>
+        <boxGeometry args={[size * 2, wallHeight, wallThickness]} />
+        <meshStandardMaterial color={0x8B4513} transparent opacity={0.8} />
+      </mesh>
+
+      {/* South Wall */}
+      <mesh position={[0, wallHeight / 2, size]} receiveShadow>
+        <boxGeometry args={[size * 2, wallHeight, wallThickness]} />
+        <meshStandardMaterial color={0x8B4513} transparent opacity={0.8} />
+      </mesh>
+
+      {/* East Wall */}
+      <mesh position={[size, wallHeight / 2, 0]} receiveShadow>
+        <boxGeometry args={[wallThickness, wallHeight, size * 2]} />
+        <meshStandardMaterial color={0x8B4513} transparent opacity={0.8} />
+      </mesh>
+
+      {/* West Wall */}
+      <mesh position={[-size, wallHeight / 2, 0]} receiveShadow>
+        <boxGeometry args={[wallThickness, wallHeight, size * 2]} />
+        <meshStandardMaterial color={0x8B4513} transparent opacity={0.8} />
+      </mesh>
+    </group>
+  );
+}
+
+function DecorativeElements({ theme }) {
+  // Generate decorative elements based on theme
+  const decorations = useMemo(() => {
+    const elements = [];
+    const count = 20;
+
+    for (let i = 0; i < count; i++) {
+      elements.push({
+        id: i,
+        position: [
+          MathUtils.randomFloat(-40, 40),
+          0,
+          MathUtils.randomFloat(-40, 40)
+        ],
+        scale: MathUtils.randomFloat(0.5, 2),
+        rotation: [0, Math.random() * Math.PI * 2, 0],
+        type: Math.random() > 0.5 ? 'tree' : 'rock'
+      });
+    }
+
+    return elements;
+  }, [theme]);
+
+  return (
+    <group>
+      {decorations.map(decoration => (
+        <mesh
+          key={decoration.id}
+          position={decoration.position}
+          scale={[decoration.scale, decoration.scale, decoration.scale]}
+          rotation={decoration.rotation}
+          castShadow
+          receiveShadow
+        >
+          {decoration.type === 'tree' ? (
+            <>
+              {/* Tree trunk */}
+              <cylinderGeometry args={[0.2, 0.3, 2]} />
+              <meshStandardMaterial color={0x8B4513} />
+            </>
+          ) : (
+            <>
+              {/* Rock */}
+              <sphereGeometry args={[0.5, 6, 6]} />
+              <meshStandardMaterial color={0x666666} />
+            </>
+          )}
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function BackgroundGeometry({ worldData }) {
+  return (
+    <group>
+      {/* Background mountains/hills */}
+      {Array.from({ length: 8 }, (_, i) => (
+        <mesh
+          key={i}
+          position={[
+            (i - 4) * 15,
+            MathUtils.randomFloat(5, 15),
+            -45
+          ]}
+          scale={[
+            MathUtils.randomFloat(8, 12),
+            MathUtils.randomFloat(10, 20),
+            MathUtils.randomFloat(8, 12)
+          ]}
+        >
+          <coneGeometry args={[1, 1, 6]} />
+          <meshStandardMaterial color={0x4a5d4a} />
+        </mesh>
+      ))}
     </group>
   );
 }
 
 // ========================================
-// 🛠️ FUNCIONES AUXILIARES
+// 📹 CONTROLES DE CÁMARA
 // ========================================
 
-function getLevelTheme(levelNumber) {
-  const themes = ['forest', 'desert', 'ice', 'volcano', 'space'];
-  return themes[(levelNumber - 1) % themes.length];
+function CameraControls({ mode, onModeChange, enabled }) {
+  const { camera } = useThree();
+
+  // Camera mode switching with keyboard
+  useEffect(() => {
+    const handleKeyPress = (event) => {
+      if (event.key === 'c' || event.key === 'C') {
+        const modes = ['follow', 'free', 'cinematic'];
+        const currentIndex = modes.indexOf(mode);
+        const nextIndex = (currentIndex + 1) % modes.length;
+        onModeChange(modes[nextIndex]);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [mode, onModeChange]);
+
+  return (
+    <>
+      {enabled && (
+        <OrbitControls
+          enablePan={true}
+          enableZoom={true}
+          enableRotate={true}
+          enableDamping={true}
+          dampingFactor={0.05}
+          minDistance={5}
+          maxDistance={50}
+          maxPolarAngle={Math.PI / 2}
+        />
+      )}
+    </>
+  );
 }
 
-function generateLevelPlatforms(levelNumber) {
-  const basePlatforms = [
-    { type: 'static', position: [0, 0, 0], size: [20, 1, 4], material: 'grass' },
-    { type: 'static', position: [25, 2, 0], size: [8, 1, 4], material: 'stone' }
-  ];
+// ========================================
+// 🐛 INFORMACIÓN DE DEBUG
+// ========================================
 
-  // Agregar más plataformas basadas en el nivel
-  for (let i = 0; i < levelNumber; i++) {
-    basePlatforms.push({
-      type: 'moving',
-      position: [15 + i * 10, 3 + i * 2, 0],
-      size: [4, 0.5, 4],
-      movement: { type: 'horizontal', distance: 5, speed: 1 + i * 0.2 },
-      material: 'metal'
-    });
-  }
+function DebugInfo({ playerPosition, performance, worldData }) {
+  const { camera } = useThree();
 
-  return basePlatforms;
+  return (
+    <div style={{
+      position: 'absolute',
+      top: 10,
+      left: 10,
+      background: 'rgba(0,0,0,0.8)',
+      color: '#00ff00',
+      fontFamily: 'monospace',
+      fontSize: '12px',
+      padding: '10px',
+      borderRadius: '5px',
+      zIndex: 1000,
+      pointerEvents: 'none'
+    }}>
+      <div>Player: x:{playerPosition.x.toFixed(2)} y:{playerPosition.y.toFixed(2)} z:{playerPosition.z.toFixed(2)}</div>
+      <div>Camera: x:{camera.position.x.toFixed(2)} y:{camera.position.y.toFixed(2)} z:{camera.position.z.toFixed(2)}</div>
+      <div>FPS: {performance.fps || 0}</div>
+      <div>Frame Time: {performance.frameTime || 0}ms</div>
+      <div>Draw Calls: {performance.drawCalls || 0}</div>
+      <div>Triangles: {performance.triangles || 0}</div>
+      <div>Memory: {performance.memoryUsage?.toFixed(1) || 0}MB</div>
+      <div>Level: {worldData.level || 1}</div>
+      <div>Theme: {worldData.theme || 'forest'}</div>
+    </div>
+  );
 }
 
-function generateLevelEnemies(levelNumber) {
-  const baseEnemies = [
-    { type: 'basic', position: [10, 2, 0], count: 1 },
-    { type: 'flying', position: [30, 6, 0], count: 1 }
-  ];
+// ========================================
+// 🔄 FALLBACK DE CARGA
+// ========================================
 
-  // Agregar más enemigos basados en el nivel
-  for (let i = 1; i < levelNumber; i++) {
-    baseEnemies.push({
-      type: Math.random() > 0.5 ? 'basic' : 'flying',
-      position: [5 + i * 15, 2 + Math.random() * 4, (Math.random() - 0.5) * 10],
-      count: 1
-    });
-  }
-
-  return baseEnemies;
+function WorldLoadingFallback() {
+  return (
+    <div style={{
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      color: 'white',
+      fontSize: '18px',
+      textAlign: 'center'
+    }}>
+      <div>Loading World...</div>
+      <div style={{ marginTop: '10px', fontSize: '14px', opacity: 0.8 }}>
+        Generating terrain and entities
+      </div>
+    </div>
+  );
 }
 
-function generateLevelCollectibles(levelNumber) {
-  const baseCollectibles = [
-    { type: 'coin', positions: [[5, 2, 0], [15, 2, 0], [35, 2, 0]] },
-    { type: 'gem', positions: [[25, 4, 0]] }
+// ========================================
+// 🛠️ UTILITY FUNCTIONS
+// ========================================
+
+async function loadWorldData(level) {
+  // Simulate loading time
+  await new Promise(resolve => setTimeout(resolve, 1000));
+
+  // Generate procedural world data
+  const themes = ['forest', 'cave', 'ocean'];
+  const theme = themes[Math.min(level - 1, themes.length - 1)];
+
+  return {
+    level,
+    theme,
+    spawnPoint: [0, 1, 0],
+    bounds: 50,
+    platforms: generateLevelPlatforms(level),
+    collectibles: generateLevelCollectibles(level),
+    enemies: generateLevelEnemies(level),
+    objectives: generateLevelObjectives(level),
+    metadata: {
+      name: `Level ${level}`,
+      description: `Adventure through the ${theme}`,
+      difficulty: level <= 3 ? 'easy' : level <= 6 ? 'medium' : 'hard',
+      estimatedTime: `${Math.min(5 + level * 2, 15)} minutes`
+    }
+  };
+}
+
+function generateLevelPlatforms(level) {
+  // Platform generation logic would go here
+  return null; // Let Platforms component generate procedurally
+}
+
+function generateLevelCollectibles(level) {
+  // Collectible generation logic would go here
+  return null; // Let Collectibles component generate procedurally
+}
+
+function generateLevelEnemies(level) {
+  // Enemy generation logic would go here
+  return null; // Let Enemies component generate procedurally
+}
+
+function generateLevelObjectives(level) {
+  return [
+    {
+      id: 'main',
+      type: 'collect',
+      target: 'coins',
+      amount: 10 + level * 5,
+      description: `Collect ${10 + level * 5} coins`
+    },
+    {
+      id: 'secondary',
+      type: 'defeat',
+      target: 'enemies',
+      amount: 3 + level * 2,
+      description: `Defeat ${3 + level * 2} enemies`
+    }
   ];
-
-  // Agregar más coleccionables basados en el nivel
-  for (let i = 1; i < levelNumber; i++) {
-    baseCollectibles.push({
-      type: 'coin',
-      positions: [
-        [i * 8, 2 + Math.random() * 3, (Math.random() - 0.5) * 8],
-        [i * 8 + 3, 2 + Math.random() * 3, (Math.random() - 0.5) * 8]
-      ]
-    });
-  }
-
-  return baseCollectibles;
 }
 
 export default GameWorld;

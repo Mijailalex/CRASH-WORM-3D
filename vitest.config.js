@@ -1,440 +1,454 @@
-// ============================================================================
-// 🧪 CRASH WORM 3D - VITEST CONFIGURATION
-// ============================================================================
-// Ubicación: vitest.config.js
-// Configuración avanzada de testing para React + Three.js + Game Development
+/* ============================================================================ */
+/* 🎮 CRASH WORM 3D - CONFIGURACIÓN DE VITE */
+/* ============================================================================ */
+/* Ubicación: vite.config.js */
 
-import { defineConfig } from 'vitest/config';
-import react from '@vitejs/plugin-react';
+import { defineConfig, loadEnv } from 'vite';
+import react from '@vitejs/plugin-react-swc';
+import { VitePWA } from 'vite-plugin-pwa';
+import eslint from 'vite-plugin-eslint';
 import { resolve } from 'path';
+import { visualizer } from 'rollup-plugin-visualizer';
 
-export default defineConfig({
-  // ========================================
-  // 🔌 PLUGINS
-  // ========================================
-  plugins: [
-    react({
-      // Configuración específica para testing
-      jsxImportSource: 'react',
-      jsxRuntime: 'automatic',
-      babel: {
-        plugins: [
-          // Plugin para mock de módulos en tests
-          'babel-plugin-transform-vite-meta-env'
-        ]
-      }
-    })
-  ],
+// ========================================
+// 🔧 CONFIGURACIÓN PRINCIPAL
+// ========================================
 
-  // ========================================
-  // 📁 RESOLUCIÓN DE PATHS
-  // ========================================
-  resolve: {
-    alias: {
-      '@': resolve(__dirname, 'src'),
-      '@components': resolve(__dirname, 'src/components'),
-      '@core': resolve(__dirname, 'src/core'),
-      '@hooks': resolve(__dirname, 'src/hooks'),
-      '@utils': resolve(__dirname, 'src/utils'),
-      '@styles': resolve(__dirname, 'src/styles'),
-      '@data': resolve(__dirname, 'src/data'),
-      '@context': resolve(__dirname, 'src/context'),
-      '@types': resolve(__dirname, 'src/types'),
-      '@assets': resolve(__dirname, 'src/assets'),
-      '@tests': resolve(__dirname, 'tests')
-    }
-  },
+export default defineConfig(({ command, mode }) => {
+  // Load environment variables
+  const env = loadEnv(mode, process.cwd(), '');
 
-  // ========================================
-  // 🧪 CONFIGURACIÓN DE VITEST
-  // ========================================
-  test: {
-    // ========================================
-    // 🌍 ENTORNO DE TESTING
-    // ========================================
-    environment: 'jsdom',
-    globals: true,
-    
-    // Setup files
-    setupFiles: [
-      './tests/setup.js',
-      './tests/mocks/index.js'
-    ],
-    
-    // ========================================
-    // 📁 ARCHIVOS DE TEST
-    // ========================================
-    include: [
-      'src/**/*.{test,spec}.{js,jsx,ts,tsx}',
-      'tests/**/*.{test,spec}.{js,jsx,ts,tsx}'
-    ],
-    
-    exclude: [
-      'node_modules',
-      'dist',
-      'build',
-      '.vite',
-      'coverage',
-      'e2e',
-      'playwright-tests',
-      'src/**/*.stories.{js,jsx,ts,tsx}',
-      'src/**/*.e2e.{js,jsx,ts,tsx}'
-    ],
+  // Determine if this is a build or development
+  const isBuild = command === 'build';
+  const isDev = mode === 'development';
+  const isAnalyze = mode === 'analyze';
 
-    // ========================================
-    // ⏱️ TIMEOUTS Y PERFORMANCE
-    // ========================================
-    testTimeout: 10000,
-    hookTimeout: 10000,
-    teardownTimeout: 5000,
-    
-    // Configuración para tests de juego (pueden ser más lentos)
-    slowTestThreshold: 5000,
+  console.log(`🏗️ Building in ${mode} mode (${command})`);
 
+  return {
     // ========================================
-    // 📊 COVERAGE CONFIGURATION
+    // 🔌 PLUGINS
     // ========================================
-    coverage: {
-      provider: 'v8',
-      reporter: [
-        'text',
-        'text-summary',
-        'html',
-        'lcov',
-        'json-summary'
-      ],
-      
-      // Directorios y archivos a incluir en coverage
-      include: [
-        'src/**/*.{js,jsx,ts,tsx}',
-        '!src/**/*.stories.{js,jsx,ts,tsx}',
-        '!src/**/*.test.{js,jsx,ts,tsx}',
-        '!src/**/*.spec.{js,jsx,ts,tsx}'
-      ],
-      
-      exclude: [
-        'node_modules/',
-        'tests/',
-        'coverage/',
-        'dist/',
-        'build/',
-        'public/',
-        'src/main.jsx',
-        'src/App.jsx',
-        'src/**/*.d.ts',
-        'src/assets/',
-        'src/styles/',
-        'vite.config.js',
-        'vitest.config.js'
-      ],
-      
-      // Thresholds de coverage
-      thresholds: {
-        global: {
-          branches: 70,
-          functions: 75,
-          lines: 80,
-          statements: 80
-        },
-        // Thresholds específicos para core del juego
-        'src/core/': {
-          branches: 80,
-          functions: 85,
-          lines: 90,
-          statements: 90
-        },
-        // Thresholds más relajados para componentes UI
-        'src/components/': {
-          branches: 60,
-          functions: 70,
-          lines: 75,
-          statements: 75
+    plugins: [
+      // React plugin with SWC for faster builds
+      react({
+        // Enable React refresh in development
+        fastRefresh: isDev,
+        // JSX runtime configuration
+        jsxImportSource: 'react',
+        // SWC options
+        swcOptions: {
+          jsc: {
+            transform: {
+              react: {
+                runtime: 'automatic',
+                development: isDev,
+                refresh: isDev
+              }
+            }
+          }
         }
-      },
-      
-      // Reportes detallados
-      reportsDirectory: './coverage',
-      skipFull: false,
-      all: true
+      }),
+
+      // ESLint integration
+      eslint({
+        cache: true,
+        include: ['src/**/*.{js,jsx,ts,tsx}'],
+        exclude: ['node_modules', 'dist', 'build'],
+        failOnWarning: isBuild,
+        failOnError: isBuild
+      }),
+
+      // PWA Plugin
+      VitePWA({
+        registerType: 'autoUpdate',
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          runtimeCaching: [
+            {
+              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'google-fonts-cache',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            },
+            {
+              urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'gstatic-fonts-cache',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            },
+            {
+              urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'images-cache',
+                expiration: {
+                  maxEntries: 100,
+                  maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                }
+              }
+            },
+            {
+              urlPattern: /\.(?:mp3|wav|ogg|m4a)$/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'audio-cache',
+                expiration: {
+                  maxEntries: 50,
+                  maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                }
+              }
+            }
+          ]
+        },
+        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'safari-pinned-tab.svg'],
+        manifest: {
+          name: 'Crash Worm 3D Adventure',
+          short_name: 'CrashWorm3D',
+          description: 'Un juego de plataformas 3D multijugador épico',
+          theme_color: '#1e293b',
+          background_color: '#0f172a',
+          display: 'standalone',
+          orientation: 'landscape-primary',
+          scope: '/',
+          start_url: '/',
+          categories: ['games', 'entertainment'],
+          screenshots: [
+            {
+              src: '/screenshots/gameplay1.png',
+              sizes: '1280x720',
+              type: 'image/png',
+              form_factor: 'wide',
+              label: 'Gameplay principal'
+            },
+            {
+              src: '/screenshots/mobile1.png',
+              sizes: '750x1334',
+              type: 'image/png',
+              form_factor: 'narrow',
+              label: 'Vista móvil'
+            }
+          ],
+          icons: [
+            {
+              src: '/icons/icon-192x192.png',
+              sizes: '192x192',
+              type: 'image/png',
+              purpose: 'any maskable'
+            },
+            {
+              src: '/icons/icon-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'any maskable'
+            }
+          ]
+        },
+        devOptions: {
+          enabled: isDev,
+          type: 'module'
+        }
+      }),
+
+      // Bundle analyzer for build analysis
+      isAnalyze && visualizer({
+        filename: 'dist/stats.html',
+        open: true,
+        gzipSize: true,
+        brotliSize: true
+      })
+    ].filter(Boolean),
+
+    // ========================================
+    // 📁 PATH RESOLUTION
+    // ========================================
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, 'src'),
+        '@components': resolve(__dirname, 'src/components'),
+        '@core': resolve(__dirname, 'src/core'),
+        '@hooks': resolve(__dirname, 'src/hooks'),
+        '@utils': resolve(__dirname, 'src/utils'),
+        '@styles': resolve(__dirname, 'src/styles'),
+        '@data': resolve(__dirname, 'src/data'),
+        '@context': resolve(__dirname, 'src/context'),
+        '@types': resolve(__dirname, 'src/types'),
+        '@assets': resolve(__dirname, 'src/assets'),
+        '@public': resolve(__dirname, 'public')
+      }
     },
 
     // ========================================
-    // 🎯 MOCKING CONFIGURATION
+    // 🌍 ENVIRONMENT VARIABLES
     // ========================================
-    
-    // Auto-mock de módulos externos
-    deps: {
-      external: [
-        // Mantener estas librerías como externas (no bundlear)
+    define: {
+      __APP_VERSION__: JSON.stringify(process.env.npm_package_version),
+      __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
+      __DEV__: isDev,
+      __PROD__: isBuild
+    },
+
+    // ========================================
+    // 📦 DEPENDENCY OPTIMIZATION
+    // ========================================
+    optimizeDeps: {
+      include: [
+        'react',
+        'react-dom',
         'three',
-        'cannon-es',
-        'tone'
+        '@react-three/fiber',
+        '@react-three/drei',
+        '@react-three/rapier',
+        'tone',
+        'howler',
+        'mathjs',
+        'lodash',
+        'uuid',
+        'crypto-js'
+      ],
+      exclude: [
+        // Exclude large dependencies that should be loaded on demand
       ]
     },
 
     // ========================================
-    // 📱 CONFIGURACIÓN ESPECÍFICA POR ENTORNO
+    // 🖥️ DEVELOPMENT SERVER
     // ========================================
-    
-    // Variables de entorno para tests
-    env: {
-      NODE_ENV: 'test',
-      VITE_API_URL: 'http://localhost:8080',
-      VITE_WEBSOCKET_URL: 'ws://localhost:8081',
-      VITE_ENABLE_ANALYTICS: 'false',
-      VITE_LOG_LEVEL: 'silent'
-    },
-
-    // ========================================
-    // 🔧 CONFIGURACIÓN AVANZADA
-    // ========================================
-    
-    // Pool de workers para paralelización
-    pool: 'threads',
-    poolOptions: {
-      threads: {
-        singleThread: false,
-        minThreads: 1,
-        maxThreads: 4
+    server: {
+      host: true, // Allow external connections
+      port: 3000,
+      strictPort: true,
+      cors: true,
+      proxy: {
+        // Proxy API calls to backend server
+        '/api': {
+          target: env.VITE_API_URL || 'http://localhost:8080',
+          changeOrigin: true,
+          secure: false
+        },
+        '/socket.io': {
+          target: env.VITE_WS_URL || 'ws://localhost:8080',
+          ws: true,
+          changeOrigin: true
+        }
+      },
+      fs: {
+        // Allow serving files from one level up from project root
+        allow: ['..']
+      },
+      hmr: {
+        overlay: true
       }
     },
-    
-    // Configuración de reporters
-    reporter: [
-      'verbose',
-      'vitest-sonar-reporter',
-      'junit',
-      'json'
-    ],
-    
-    outputFile: {
-      'vitest-sonar-reporter': './coverage/sonar-report.xml',
-      'junit': './coverage/junit.xml',
-      'json': './coverage/test-results.json'
-    },
-    
-    // ========================================
-    // 🎮 CONFIGURACIÓN ESPECÍFICA PARA GAME DEV
-    // ========================================
-    
-    // Configuración para tests de Three.js
-    transformMode: {
-      web: [/\.[jt]sx?$/],
-      ssr: []
-    },
-    
-    // Manejo de assets estáticos
-    assetsInclude: [
-      '**/*.glb',
-      '**/*.gltf',
-      '**/*.wav',
-      '**/*.mp3',
-      '**/*.png',
-      '**/*.jpg'
-    ],
 
     // ========================================
-    // 🔍 WATCH MODE CONFIGURATION
+    // 🔍 PREVIEW SERVER
     // ========================================
-    
-    watch: true,
-    watchExclude: [
-      'node_modules/**',
-      'dist/**',
-      'build/**',
-      'coverage/**',
-      '.git/**'
-    ],
-    
-    // Configuración de cache
-    cache: {
-      dir: './node_modules/.vitest'
+    preview: {
+      host: true,
+      port: 4173,
+      strictPort: true,
+      cors: true
     },
 
     // ========================================
-    // 🚨 ERROR HANDLING
+    // 🏗️ BUILD CONFIGURATION
     // ========================================
-    
-    // Configuración de retry para tests flaky
-    retry: 2,
-    
-    // Bail en el primer error (útil para CI)
-    bail: process.env.CI ? 1 : 0,
-    
-    // Configuración de logging
-    logHeapUsage: true,
-    
+    build: {
+      target: 'esnext',
+      outDir: 'dist',
+      assetsDir: 'assets',
+      sourcemap: isDev || isAnalyze,
+      minify: isBuild ? 'esbuild' : false,
+
+      // Rollup options
+      rollupOptions: {
+        input: {
+          main: resolve(__dirname, 'index.html')
+        },
+        output: {
+          // Manual chunk splitting for better caching
+          manualChunks: {
+            // Vendor libraries
+            'vendor-react': ['react', 'react-dom'],
+            'vendor-three': ['three', '@react-three/fiber', '@react-three/drei'],
+            'vendor-physics': ['@react-three/rapier'],
+            'vendor-audio': ['tone', 'howler'],
+            'vendor-utils': ['mathjs', 'lodash', 'uuid', 'crypto-js'],
+
+            // Game core systems
+            'game-core': [
+              'src/core/GameEngine.js',
+              'src/core/AdvancedSystems.js',
+              'src/core/PerformanceAndEffects.js'
+            ],
+
+            // Game components
+            'game-components': [
+              'src/components/Player.jsx',
+              'src/components/GameWorld.jsx',
+              'src/components/GameUI.jsx'
+            ],
+
+            // Game entities
+            'game-entities': [
+              'src/components/Platforms.jsx',
+              'src/components/Enemies.jsx',
+              'src/components/Collectibles.jsx',
+              'src/components/ParticleEffects.jsx'
+            ]
+          },
+
+          // Asset naming
+          chunkFileNames: (chunkInfo) => {
+            const facadeModuleId = chunkInfo.facadeModuleId
+              ? chunkInfo.facadeModuleId.split('/').pop()
+              : 'unknown';
+            return `js/[name]-[hash].js`;
+          },
+          entryFileNames: 'js/[name]-[hash].js',
+          assetFileNames: (assetInfo) => {
+            const info = assetInfo.name.split('.');
+            const ext = info[info.length - 1];
+            if (/png|jpe?g|svg|gif|tiff|bmp|ico/i.test(ext)) {
+              return `images/[name]-[hash].${ext}`;
+            }
+            if (/woff2?|eot|ttf|otf/i.test(ext)) {
+              return `fonts/[name]-[hash].${ext}`;
+            }
+            if (/mp3|wav|ogg|m4a/i.test(ext)) {
+              return `audio/[name]-[hash].${ext}`;
+            }
+            return `assets/[name]-[hash].${ext}`;
+          }
+        },
+
+        // External dependencies (CDN)
+        external: isBuild ? [] : []
+      },
+
+      // Asset handling
+      assetsInlineLimit: 4096, // 4kb
+
+      // CSS code splitting
+      cssCodeSplit: true,
+
+      // Reports
+      reportCompressedSize: isBuild,
+
+      // Chunk size warnings
+      chunkSizeWarningLimit: 1000, // 1MB
+
+      // Build performance
+      watch: isDev ? {} : null
+    },
+
     // ========================================
-    // 🔗 INTEGRACIÓN CON HERRAMIENTAS
+    // 🎨 CSS CONFIGURATION
     // ========================================
-    
-    // Configuración para UI de Vitest
-    ui: true,
-    uiBase: '/vitest/',
-    
-    // Configuración para debugging
-    inspect: false,
-    inspectBrk: false,
-    
+    css: {
+      devSourcemap: isDev,
+      preprocessorOptions: {
+        scss: {
+          additionalData: `@import "@/styles/variables.scss";`
+        }
+      },
+      modules: {
+        localsConvention: 'camelCaseOnly'
+      },
+      postcss: {
+        plugins: [
+          // PostCSS plugins would go here
+        ]
+      }
+    },
+
     // ========================================
-    // 📊 BENCHMARK CONFIGURATION
+    // 📊 PERFORMANCE CONFIGURATION
     // ========================================
-    
-    benchmark: {
-      include: [
-        'src/**/*.{bench,benchmark}.{js,jsx,ts,tsx}',
-        'tests/benchmarks/**/*.{js,jsx,ts,tsx}'
-      ],
-      exclude: [
-        'node_modules',
-        'dist',
-        'coverage'
-      ],
-      reporters: ['verbose']
+    esbuild: {
+      target: 'esnext',
+      drop: isBuild ? ['console', 'debugger'] : [],
+      pure: isBuild ? ['console.log', 'console.warn'] : [],
+      minifyIdentifiers: isBuild,
+      minifySyntax: isBuild,
+      minifyWhitespace: isBuild,
+      treeShaking: isBuild
+    },
+
+    // ========================================
+    // 🔍 WORKER CONFIGURATION
+    // ========================================
+    worker: {
+      format: 'es',
+      plugins: [
+        // Worker-specific plugins
+      ]
+    },
+
+    // ========================================
+    // 🧪 TEST CONFIGURATION
+    // ========================================
+    test: {
+      globals: true,
+      environment: 'jsdom',
+      setupFiles: ['src/test/setup.js'],
+      coverage: {
+        provider: 'v8',
+        reporter: ['text', 'json', 'html'],
+        exclude: [
+          'node_modules/',
+          'src/test/',
+          '**/*.d.ts',
+          '**/*.config.js'
+        ]
+      }
+    },
+
+    // ========================================
+    // 🔧 ADVANCED OPTIONS
+    // ========================================
+
+    // Base public path
+    base: env.VITE_BASE_URL || '/',
+
+    // Mode
+    mode,
+
+    // Log level
+    logLevel: isDev ? 'info' : 'warn',
+
+    // Clear screen
+    clearScreen: true,
+
+    // App type
+    appType: 'spa',
+
+    // Experimental features
+    experimental: {
+      renderBuiltUrl: (filename, { hostType }) => {
+        if (hostType === 'js') {
+          return { js: `/${filename}` };
+        } else {
+          return { css: `/${filename}` };
+        }
+      }
     }
-  },
-
-  // ========================================
-  // 🔧 CONFIGURACIÓN DE BUILD PARA TESTS
-  // ========================================
-  
-  esbuild: {
-    target: 'node14'
-  },
-  
-  define: {
-    // Variables globales para tests
-    __TEST__: true,
-    __DEV__: true,
-    __PROD__: false,
-    
-    // Feature flags para testing
-    __ENABLE_MULTIPLAYER__: false,
-    __ENABLE_ANALYTICS__: false,
-    __ENABLE_PWA__: false,
-    
-    // URLs de testing
-    __API_URL__: '"http://localhost:8080"',
-    __WEBSOCKET_URL__: '"ws://localhost:8081"'
-  },
-
-  // ========================================
-  // 📦 OPTIMIZACIÓN DE DEPENDENCIAS
-  // ========================================
-  
-  optimizeDeps: {
-    include: [
-      'react',
-      'react-dom',
-      '@testing-library/react',
-      '@testing-library/jest-dom',
-      '@testing-library/user-event'
-    ],
-    exclude: [
-      'three',
-      'cannon-es'
-    ]
-  }
+  };
 });
-
-// ========================================
-// 💡 CONFIGURACIÓN ADICIONAL
-// ========================================
-
-/*
-SCRIPTS RECOMENDADOS PARA PACKAGE.JSON:
-
-{
-  "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:ui": "vitest --ui",
-    "test:coverage": "vitest run --coverage",
-    "test:coverage:ui": "vitest --ui --coverage",
-    "test:unit": "vitest run src",
-    "test:integration": "vitest run tests/integration",
-    "test:benchmark": "vitest bench",
-    "test:typecheck": "vitest typecheck",
-    "test:ci": "vitest run --coverage --reporter=verbose --reporter=junit --outputFile=coverage/junit.xml"
-  }
-}
-
-ARCHIVOS DE SETUP RECOMENDADOS:
-
-1. tests/setup.js:
-```javascript
-import '@testing-library/jest-dom';
-import { expect, afterEach, vi } from 'vitest';
-import { cleanup } from '@testing-library/react';
-
-// Cleanup después de cada test
-afterEach(() => {
-  cleanup();
-});
-
-// Mock de APIs del navegador no disponibles en jsdom
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation(query => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
-});
-
-// Mock de WebGL para Three.js
-HTMLCanvasElement.prototype.getContext = vi.fn();
-```
-
-2. tests/mocks/index.js:
-```javascript
-import { vi } from 'vitest';
-
-// Mock de Three.js
-vi.mock('three', () => ({
-  WebGLRenderer: vi.fn(),
-  Scene: vi.fn(),
-  PerspectiveCamera: vi.fn(),
-  BoxGeometry: vi.fn(),
-  MeshBasicMaterial: vi.fn(),
-  Mesh: vi.fn()
-}));
-
-// Mock de audio APIs
-vi.mock('tone', () => ({
-  Player: vi.fn(),
-  start: vi.fn()
-}));
-
-// Mock de WebSocket
-global.WebSocket = vi.fn();
-```
-
-CONFIGURACIÓN DE VS CODE:
-
-.vscode/settings.json:
-```json
-{
-  "vitest.enable": true,
-  "vitest.commandLine": "npm run test",
-  "testing.automaticallyOpenPeekView": "never"
-}
-```
-
-CONFIGURACIÓN DE CI/CD:
-
-GitHub Actions:
-```yaml
-- name: Run Tests
-  run: |
-    npm run test:ci
-    npm run test:typecheck
-  env:
-    NODE_ENV: test
-```
-*/

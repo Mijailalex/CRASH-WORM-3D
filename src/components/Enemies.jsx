@@ -1,81 +1,62 @@
 /* ============================================================================ */
 /* 🎮 CRASH WORM 3D - SISTEMA DE ENEMIGOS */
 /* ============================================================================ */
+/* Ubicación: src/components/Enemies.jsx */
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { RigidBody, CuboidCollider } from '@react-three/rapier';
+import { RigidBody, CapsuleCollider, BallCollider } from '@react-three/rapier';
 import * as THREE from 'three';
-import { useGame } from '@/context/GameContext';
-import { gameConfig } from '@/data/gameConfig';
-import useAudioManager from '@/hooks/useAudioManager';
-import { MathUtils } from '@/utils/gameUtils';
+import { useGameContext } from '../context/GameContext';
+import { useAudioManager } from '../hooks/useAudioManager';
+import { gameConfig } from '../data/gameConfig';
+import { MathUtils, VectorUtils, GameUtils } from '../utils/gameUtils';
 
 // ========================================
-// 🏭 COMPONENTE MANAGER DE ENEMIGOS
+// 👾 COMPONENTE PRINCIPAL DE ENEMIGOS
 // ========================================
 
-export function EnemyManager({ playerRef, enemySpawns = [] }) {
+export function Enemies({ levelData, playerPosition, onEnemyDefeat, ...props }) {
+  const { currentLevel, player, addScore } = useGameContext();
   const [enemies, setEnemies] = useState([]);
-  const { state, utils } = useGame();
-  const nextEnemyId = useRef(0);
 
-  // Spawn inicial de enemigos
+  // Generate enemies based on level data or procedurally
   useEffect(() => {
-    if (enemySpawns.length > 0) {
-      const initialEnemies = enemySpawns.map(spawn => ({
-        id: nextEnemyId.current++,
-        type: spawn.type || 'basic',
-        position: spawn.position,
-        config: spawn.config || {},
-        active: true
-      }));
-
-      setEnemies(initialEnemies);
+    if (levelData?.enemies) {
+      setEnemies(levelData.enemies);
+    } else {
+      // Procedural enemy generation
+      const generated = generateProceduralEnemies(currentLevel);
+      setEnemies(generated);
     }
-  }, [enemySpawns]);
+  }, [levelData, currentLevel]);
 
-  // Limpiar enemigos inactivos
-  useEffect(() => {
-    const cleanupInterval = setInterval(() => {
-      setEnemies(prev => prev.filter(enemy => enemy.active));
-    }, 5000);
+  const handleEnemyDefeat = useCallback((enemyId, enemyData) => {
+    // Remove enemy from state
+    setEnemies(prev => prev.filter(enemy => enemy.id !== enemyId));
 
-    return () => clearInterval(cleanupInterval);
-  }, []);
+    // Add score for defeating enemy
+    addScore(enemyData.scoreValue || 100);
 
-  const spawnEnemy = useCallback((type, position, config = {}) => {
-    const newEnemy = {
-      id: nextEnemyId.current++,
-      type,
-      position,
-      config,
-      active: true
-    };
+    // Notify parent component
+    onEnemyDefeat?.(enemyData);
+  }, [addScore, onEnemyDefeat]);
 
-    setEnemies(prev => [...prev, newEnemy]);
-    return newEnemy.id;
-  }, []);
-
-  const destroyEnemy = useCallback((enemyId) => {
+  const handleEnemyUpdate = useCallback((enemyId, updates) => {
     setEnemies(prev => prev.map(enemy =>
-      enemy.id === enemyId ? { ...enemy, active: false } : enemy
+      enemy.id === enemyId ? { ...enemy, ...updates } : enemy
     ));
   }, []);
 
-  if (!utils.isPlaying) return null;
-
   return (
-    <group>
-      {enemies.map(enemy => enemy.active && (
+    <group {...props}>
+      {enemies.map((enemyData) => (
         <Enemy
-          key={enemy.id}
-          enemyId={enemy.id}
-          type={enemy.type}
-          position={enemy.position}
-          playerRef={playerRef}
-          config={enemy.config}
-          onDestroy={() => destroyEnemy(enemy.id)}
+          key={enemyData.id}
+          data={enemyData}
+          playerPosition={playerPosition}
+          onDefeat={(data) => handleEnemyDefeat(enemyData.id, data)}
+          onUpdate={(updates) => handleEnemyUpdate(enemyData.id, updates)}
         />
       ))}
     </group>
@@ -83,479 +64,692 @@ export function EnemyManager({ playerRef, enemySpawns = [] }) {
 }
 
 // ========================================
-// 👹 COMPONENTE ENEMIGO INDIVIDUAL
+// 🤖 COMPONENTE DE ENEMIGO INDIVIDUAL
 // ========================================
 
-export function Enemy({
-  enemyId,
-  type = 'basic',
-  position = [0, 1, 0],
-  playerRef,
-  config = {},
-  onDestroy
-}) {
-  const enemyRef = useRef();
+function Enemy({ data, playerPosition, onDefeat, onUpdate }) {
   const meshRef = useRef();
-  const aiStateRef = useRef('patrol');
-  const targetRef = useRef(new THREE.Vector3());
-  const lastAttackTime = useRef(0);
-  const patrolPoints = useRef([]);
-  const currentPatrolIndex = useRef(0);
+  const rigidBodyRef = useRef();
+  const groupRef = useRef();
 
-  const { actions } = useGame();
+  // Enemy state
+  const [health, setHealth] = useState(data.maxHealth || 30);
+  const [aiState, setAiState] = useState('idle'); // idle, patrol, chase, attack, hurt, dead
+  const [targetPosition, setTargetPosition] = useState(null);
+  const [lastPlayerPosition, setLastPlayerPosition] = useState(null);
+  const [animationTime, setAnimationTime] = useState(Math.random() * Math.PI * 2);
+  const [attackCooldown, setAttackCooldown] = useState(0);
+  const [patrolTarget, setPatrolTarget] = useState(null);
+  const [isVisible, setIsVisible] = useState(true);
+
   const { playSound } = useAudioManager();
+  const { settings } = useGameContext();
 
-  const [health, setHealth] = useState(gameConfig.enemies[type]?.health || 50);
-  const [isAttacking, setIsAttacking] = useState(false);
-  const [isAlert, setIsAlert] = useState(false);
-  const [animationState, setAnimationState] = useState('idle');
-
-  // Configuración del enemigo
-  const enemyConfig = { ...gameConfig.enemies[type], ...config };
-  const maxHealth = enemyConfig.health;
-
-  // ========================================
-  // 🤖 INICIALIZACIÓN DE IA
-  // ========================================
-
-  useEffect(() => {
-    // Configurar puntos de patrulla
-    const patrolRadius = 5;
-    patrolPoints.current = [
-      new THREE.Vector3(position[0] - patrolRadius, position[1], position[2]),
-      new THREE.Vector3(position[0] + patrolRadius, position[1], position[2]),
-      new THREE.Vector3(position[0], position[1], position[2] - patrolRadius),
-      new THREE.Vector3(position[0], position[1], position[2] + patrolRadius)
-    ];
-
-    targetRef.current.copy(patrolPoints.current[0]);
-  }, [position]);
+  // Enemy configuration
+  const config = useMemo(() => ({
+    type: data.type || 'basic',
+    position: data.position || { x: 0, y: 1, z: 0 },
+    maxHealth: data.maxHealth || 30,
+    speed: data.speed || 2,
+    damage: data.damage || 10,
+    attackRange: data.attackRange || 1.5,
+    detectionRange: data.detectionRange || 8,
+    scoreValue: data.scoreValue || 100,
+    size: data.size || { x: 1, y: 1, z: 1 },
+    color: data.color || gameConfig.enemies.types[data.type]?.color || 0xff4444,
+    patrolRange: data.patrolRange || 5,
+    behavior: data.behavior || 'aggressive', // aggressive, defensive, patrol, guard
+    ...data
+  }), [data]);
 
   // ========================================
-  // 🧠 SISTEMA DE IA
+  // 🧠 AI SYSTEM
   // ========================================
 
-  const updateAI = useCallback((deltaTime) => {
-    if (!enemyRef.current || !playerRef?.current) return;
+  useFrame((state, delta) => {
+    if (health <= 0 || !rigidBodyRef.current) return;
 
-    const enemyPos = enemyRef.current.translation();
-    const playerPos = playerRef.current.translation();
+    setAnimationTime(prev => prev + delta);
 
-    const distanceToPlayer = new THREE.Vector3(
-      playerPos.x - enemyPos.x,
-      playerPos.y - enemyPos.y,
-      playerPos.z - enemyPos.z
-    ).length();
+    // Update cooldowns
+    if (attackCooldown > 0) {
+      setAttackCooldown(prev => prev - delta);
+    }
 
-    const detectionRadius = enemyConfig.detectionRadius;
-    const attackRadius = enemyConfig.attackRadius;
+    // AI decision making
+    updateAI(delta);
 
-    switch (aiStateRef.current) {
+    // Apply movement
+    applyMovement(delta);
+
+    // Update animations
+    updateAnimations();
+  });
+
+  const updateAI = useCallback((delta) => {
+    if (!playerPosition) return;
+
+    const distanceToPlayer = VectorUtils.distance(
+      rigidBodyRef.current.translation(),
+      playerPosition
+    );
+
+    // Update AI state based on distance and behavior
+    switch (aiState) {
+      case 'idle':
+        handleIdleState(distanceToPlayer);
+        break;
       case 'patrol':
-        handlePatrolState(enemyPos, distanceToPlayer, detectionRadius);
-        break;
-
-      case 'chase':
-        handleChaseState(enemyPos, playerPos, distanceToPlayer, attackRadius, detectionRadius);
-        break;
-
-      case 'attack':
-        handleAttackState(distanceToPlayer, attackRadius);
-        break;
-
-      case 'return':
-        handleReturnState(enemyPos, distanceToPlayer, detectionRadius);
-        break;
-    }
-
-    // Actualizar animación basada en el estado
-    updateAnimation();
-
-  }, [enemyConfig, playerRef]);
-
-  const handlePatrolState = (enemyPos, distanceToPlayer, detectionRadius) => {
-    // Detectar jugador
-    if (distanceToPlayer <= detectionRadius) {
-      aiStateRef.current = 'chase';
-      setIsAlert(true);
-      return;
-    }
-
-    // Moverse hacia el punto de patrulla actual
-    const target = patrolPoints.current[currentPatrolIndex.current];
-    const distanceToTarget = new THREE.Vector3(
-      target.x - enemyPos.x,
-      target.y - enemyPos.y,
-      target.z - enemyPos.z
-    ).length();
-
-    if (distanceToTarget < 0.5) {
-      // Cambiar al siguiente punto de patrulla
-      currentPatrolIndex.current = (currentPatrolIndex.current + 1) % patrolPoints.current.length;
-    }
-
-    targetRef.current.copy(target);
-    setAnimationState('walking');
-  };
-
-  const handleChaseState = (enemyPos, playerPos, distanceToPlayer, attackRadius, detectionRadius) => {
-    // Perder al jugador si está muy lejos
-    if (distanceToPlayer > detectionRadius * 1.5) {
-      aiStateRef.current = 'return';
-      setIsAlert(false);
-      return;
-    }
-
-    // Entrar en modo ataque si está cerca
-    if (distanceToPlayer <= attackRadius) {
-      aiStateRef.current = 'attack';
-      return;
-    }
-
-    // Perseguir al jugador
-    targetRef.current.set(playerPos.x, playerPos.y, playerPos.z);
-    setAnimationState('running');
-  };
-
-  const handleAttackState = (distanceToPlayer, attackRadius) => {
-    const currentTime = Date.now();
-
-    // Salir del modo ataque si el jugador está lejos
-    if (distanceToPlayer > attackRadius * 1.2) {
-      aiStateRef.current = 'chase';
-      setIsAttacking(false);
-      return;
-    }
-
-    // Atacar si ha pasado suficiente tiempo
-    if (currentTime - lastAttackTime.current >= enemyConfig.attackCooldown) {
-      performAttack();
-      lastAttackTime.current = currentTime;
-    }
-  };
-
-  const handleReturnState = (enemyPos, distanceToPlayer, detectionRadius) => {
-    // Detectar jugador de nuevo
-    if (distanceToPlayer <= detectionRadius) {
-      aiStateRef.current = 'chase';
-      setIsAlert(true);
-      return;
-    }
-
-    // Volver al punto de patrulla más cercano
-    const originalPos = new THREE.Vector3(...position);
-    const distanceToOrigin = new THREE.Vector3(
-      originalPos.x - enemyPos.x,
-      originalPos.y - enemyPos.y,
-      originalPos.z - enemyPos.z
-    ).length();
-
-    if (distanceToOrigin < 1) {
-      aiStateRef.current = 'patrol';
-    }
-
-    targetRef.current.copy(originalPos);
-    setAnimationState('walking');
-  };
-
-  const updateAnimation = () => {
-    switch (aiStateRef.current) {
-      case 'patrol':
-        setAnimationState('walking');
+        handlePatrolState(distanceToPlayer);
         break;
       case 'chase':
-        setAnimationState('running');
+        handleChaseState(distanceToPlayer);
         break;
       case 'attack':
-        setAnimationState('attacking');
+        handleAttackState(distanceToPlayer, delta);
         break;
-      case 'return':
-        setAnimationState('walking');
+      case 'hurt':
+        handleHurtState(delta);
         break;
       default:
-        setAnimationState('idle');
+        setAiState('idle');
     }
-  };
+  }, [aiState, playerPosition]);
+
+  const handleIdleState = useCallback((distanceToPlayer) => {
+    if (distanceToPlayer <= config.detectionRange) {
+      setAiState('chase');
+      setLastPlayerPosition(playerPosition);
+      playSound('enemy_alert', { volume: settings.audio.sfxVolume * 0.5 });
+    } else if (config.behavior === 'patrol') {
+      setAiState('patrol');
+      generatePatrolTarget();
+    }
+  }, [config.detectionRange, config.behavior, playerPosition, playSound, settings]);
+
+  const handlePatrolState = useCallback((distanceToPlayer) => {
+    if (distanceToPlayer <= config.detectionRange) {
+      setAiState('chase');
+      setLastPlayerPosition(playerPosition);
+      return;
+    }
+
+    // Continue patrolling
+    if (!patrolTarget || VectorUtils.distance(rigidBodyRef.current.translation(), patrolTarget) < 1) {
+      generatePatrolTarget();
+    }
+
+    setTargetPosition(patrolTarget);
+  }, [config.detectionRange, playerPosition, patrolTarget]);
+
+  const handleChaseState = useCallback((distanceToPlayer) => {
+    if (distanceToPlayer > config.detectionRange * 1.5) {
+      // Lost player
+      setAiState('patrol');
+      setTargetPosition(null);
+      return;
+    }
+
+    if (distanceToPlayer <= config.attackRange) {
+      setAiState('attack');
+      setTargetPosition(null);
+    } else {
+      setTargetPosition(playerPosition);
+      setLastPlayerPosition(playerPosition);
+    }
+  }, [config.detectionRange, config.attackRange, playerPosition]);
+
+  const handleAttackState = useCallback((distanceToPlayer, delta) => {
+    if (distanceToPlayer > config.attackRange) {
+      setAiState('chase');
+      return;
+    }
+
+    if (attackCooldown <= 0) {
+      performAttack();
+      setAttackCooldown(2); // 2 second cooldown
+    }
+  }, [config.attackRange, attackCooldown]);
+
+  const handleHurtState = useCallback((delta) => {
+    // Stay in hurt state for a short time
+    setTimeout(() => {
+      if (health > 0) {
+        setAiState('chase');
+      }
+    }, 500);
+  }, [health]);
+
+  const generatePatrolTarget = useCallback(() => {
+    const basePosition = config.position;
+    const angle = Math.random() * Math.PI * 2;
+    const distance = Math.random() * config.patrolRange;
+
+    const newTarget = {
+      x: basePosition.x + Math.cos(angle) * distance,
+      y: basePosition.y,
+      z: basePosition.z + Math.sin(angle) * distance
+    };
+
+    setPatrolTarget(newTarget);
+  }, [config.position, config.patrolRange]);
 
   // ========================================
-  // ⚔️ SISTEMA DE COMBATE
+  // 🏃‍♂️ MOVEMENT SYSTEM
+  // ========================================
+
+  const applyMovement = useCallback((delta) => {
+    if (!targetPosition || !rigidBodyRef.current) return;
+
+    const currentPos = rigidBodyRef.current.translation();
+    const direction = VectorUtils.subtract(targetPosition, currentPos);
+    direction.y = 0; // Don't move vertically
+
+    const distance = VectorUtils.magnitude(direction);
+    if (distance < 0.1) return;
+
+    const normalizedDirection = VectorUtils.normalize(direction);
+    const speed = getMovementSpeed();
+    const velocity = VectorUtils.multiply(normalizedDirection, speed);
+
+    // Apply movement
+    rigidBodyRef.current.setLinvel({
+      x: velocity.x,
+      y: rigidBodyRef.current.linvel().y, // Preserve Y velocity
+      z: velocity.z
+    }, true);
+
+    // Face movement direction
+    if (meshRef.current && distance > 0.1) {
+      const targetRotation = Math.atan2(direction.x, direction.z);
+      meshRef.current.rotation.y = MathUtils.lerp(
+        meshRef.current.rotation.y,
+        targetRotation,
+        5 * delta
+      );
+    }
+  }, [targetPosition]);
+
+  const getMovementSpeed = useCallback(() => {
+    switch (aiState) {
+      case 'chase':
+        return config.speed * 1.2;
+      case 'attack':
+        return 0; // Don't move while attacking
+      case 'hurt':
+        return config.speed * 0.3;
+      default:
+        return config.speed;
+    }
+  }, [aiState, config.speed]);
+
+  // ========================================
+  // ⚔️ COMBAT SYSTEM
   // ========================================
 
   const performAttack = useCallback(() => {
-    if (!playerRef?.current) return;
+    playSound('enemy_attack', { volume: settings.audio.sfxVolume });
 
-    setIsAttacking(true);
-    playSound('enemy_attack', { volume: 0.6 });
+    // Trigger attack animation
+    if (meshRef.current) {
+      const originalScale = meshRef.current.scale.clone();
+      meshRef.current.scale.multiplyScalar(1.2);
 
-    // Aplicar daño al jugador (esto será manejado por el sistema de colisiones)
-    // El daño real se aplica en el componente Player cuando detecta la colisión
+      setTimeout(() => {
+        if (meshRef.current) {
+          meshRef.current.scale.copy(originalScale);
+        }
+      }, 200);
+    }
 
-    setTimeout(() => {
-      setIsAttacking(false);
-    }, 500);
-  }, [playerRef, playSound]);
+    // Deal damage to player (this would be handled by collision detection)
+    // The actual damage is applied in the Player component when collision occurs
+  }, [playSound, settings]);
 
   const takeDamage = useCallback((damage) => {
     const newHealth = Math.max(0, health - damage);
     setHealth(newHealth);
 
-    // Efecto visual de daño
-    if (meshRef.current) {
-      meshRef.current.material.color.setHex(0xff4444);
-      setTimeout(() => {
-        meshRef.current.material.color.setHex(getEnemyColor(type));
-      }, 200);
-    }
+    setAiState('hurt');
+    playSound('enemy_hurt', { volume: settings.audio.sfxVolume });
 
     if (newHealth <= 0) {
       handleDeath();
-    } else {
-      // Knockback
-      if (enemyRef.current && playerRef?.current) {
-        const playerPos = playerRef.current.translation();
-        const enemyPos = enemyRef.current.translation();
-        const direction = new THREE.Vector3(
-          enemyPos.x - playerPos.x,
-          0,
-          enemyPos.z - playerPos.z
-        ).normalize();
-
-        const knockback = {
-          x: direction.x * 5,
-          y: 2,
-          z: direction.z * 5
-        };
-
-        enemyRef.current.applyImpulse(knockback, true);
-      }
     }
-  }, [health, type, playerRef]);
+
+    // Update parent component
+    onUpdate({ health: newHealth });
+  }, [health, playSound, settings, onUpdate]);
 
   const handleDeath = useCallback(() => {
-    actions.updateScore(enemyConfig.points);
-    playSound('enemy_death', { volume: 0.7 });
+    setAiState('dead');
+    playSound('enemy_death', { volume: settings.audio.sfxVolume });
 
-    // Efecto de muerte
-    if (onDestroy) {
-      onDestroy();
-    }
-  }, [actions, enemyConfig.points, playSound, onDestroy]);
-
-  // ========================================
-  // 🚶‍♂️ SISTEMA DE MOVIMIENTO
-  // ========================================
-
-  const moveTowardsTarget = useCallback((deltaTime) => {
-    if (!enemyRef.current) return;
-
-    const enemyPos = enemyRef.current.translation();
-    const direction = new THREE.Vector3(
-      targetRef.current.x - enemyPos.x,
-      0,
-      targetRef.current.z - enemyPos.z
-    ).normalize();
-
-    let speed = enemyConfig.speed;
-    if (aiStateRef.current === 'chase') {
-      speed *= 1.5; // Más rápido cuando persigue
+    // Death animation
+    if (meshRef.current) {
+      meshRef.current.rotation.z = Math.PI / 2; // Fall over
     }
 
-    const force = {
-      x: direction.x * speed * deltaTime * 60,
-      y: 0,
-      z: direction.z * speed * deltaTime * 60
-    };
-
-    enemyRef.current.applyImpulse(force, true);
-
-    // Rotar hacia la dirección de movimiento
-    if (meshRef.current && (direction.x !== 0 || direction.z !== 0)) {
-      const targetRotation = Math.atan2(direction.x, direction.z);
-      meshRef.current.rotation.y = THREE.MathUtils.lerp(
-        meshRef.current.rotation.y,
-        targetRotation,
-        deltaTime * 5
-      );
-    }
-  }, [enemyConfig.speed]);
-
-  // ========================================
-  // 🔄 GAME LOOP
-  // ========================================
-
-  useFrame((state, deltaTime) => {
-    updateAI(deltaTime);
-    moveTowardsTarget(deltaTime);
-
-    // Animación de flotación para enemigos voladores
-    if (type === 'flying' && meshRef.current) {
-      meshRef.current.position.y += Math.sin(state.clock.elapsedTime * 2) * 0.01;
+    // Disable physics
+    if (rigidBodyRef.current) {
+      rigidBodyRef.current.setEnabled(false);
     }
 
-    // Efecto de alerta
-    if (isAlert && meshRef.current) {
-      const alertIntensity = Math.sin(state.clock.elapsedTime * 10) * 0.5 + 0.5;
-      meshRef.current.material.emissiveIntensity = alertIntensity * 0.3;
-    }
-  });
+    // Remove after animation
+    setTimeout(() => {
+      setIsVisible(false);
+      onDefeat(config);
+    }, 1000);
+  }, [config, onDefeat, playSound, settings]);
 
   // ========================================
-  // 💥 MANEJO DE COLISIONES
+  // 💥 COLLISION HANDLING
   // ========================================
 
-  const handleCollision = useCallback((event) => {
+  const handleCollisionEnter = useCallback((event) => {
     const { other } = event;
 
     if (other.rigidBodyObject?.userData?.type === 'player') {
-      // Colisión con jugador - aplicar daño
-      if (aiStateRef.current === 'attack' && isAttacking) {
-        // El daño se maneja en el componente Player
-      }
+      // Handle player collision (damage is applied by player component)
+      // This is mainly for triggering effects
     }
 
     if (other.rigidBodyObject?.userData?.type === 'projectile') {
-      // Colisión con proyectil del jugador
-      takeDamage(other.rigidBodyObject.userData.damage || 25);
+      // Handle projectile damage
+      const projectileData = other.rigidBodyObject.userData;
+      takeDamage(projectileData.damage || 10);
     }
-  }, [isAttacking, takeDamage]);
+  }, [takeDamage]);
 
   // ========================================
-  // 🎨 RENDER DEL ENEMIGO
+  // 🎨 ANIMATIONS
   // ========================================
 
-  const getEnemyColor = (enemyType) => {
-    switch (enemyType) {
-      case 'basic': return 0xff4444;
-      case 'flying': return 0x44ff44;
-      case 'boss': return 0x8844ff;
-      default: return 0xff4444;
-    }
-  };
+  const updateAnimations = useCallback(() => {
+    if (!meshRef.current) return;
 
-  const getEnemyGeometry = () => {
-    switch (type) {
+    switch (aiState) {
+      case 'idle':
+        // Idle breathing animation
+        meshRef.current.scale.y = 1 + Math.sin(animationTime * 2) * 0.05;
+        break;
+      case 'patrol':
+      case 'chase':
+        // Walking animation
+        meshRef.current.position.y = Math.sin(animationTime * 8) * 0.1;
+        break;
+      case 'attack':
+        // Attack animation handled in performAttack
+        break;
+      case 'hurt':
+        // Hurt animation
+        meshRef.current.rotation.x = Math.sin(animationTime * 20) * 0.2;
+        break;
+    }
+  }, [aiState, animationTime]);
+
+  // ========================================
+  // 🎨 RENDERING
+  // ========================================
+
+  const getGeometry = useCallback(() => {
+    switch (config.type) {
+      case 'fast':
+        return <capsuleGeometry args={[config.size.x * 0.4, config.size.y * 0.8]} />;
+      case 'heavy':
+        return <boxGeometry args={[config.size.x, config.size.y, config.size.z]} />;
       case 'flying':
-        return <octahedronGeometry args={[0.6]} />;
-      case 'boss':
-        return <boxGeometry args={[1.5, 1.5, 1.5]} />;
+        return <sphereGeometry args={[config.size.x * 0.6, 8, 8]} />;
       default:
-        return <boxGeometry args={[0.8, 0.8, 0.8]} />;
+        return <capsuleGeometry args={[config.size.x * 0.5, config.size.y]} />;
     }
-  };
+  }, [config.type, config.size]);
+
+  const getMaterial = useCallback(() => {
+    let color = config.color;
+
+    // Change color based on state
+    if (aiState === 'hurt') {
+      color = 0xff8888; // Red tint when hurt
+    } else if (aiState === 'attack') {
+      color = 0xff0000; // Bright red when attacking
+    }
+
+    // Health-based opacity
+    const healthPercent = health / config.maxHealth;
+    const opacity = Math.max(0.3, healthPercent);
+
+    return (
+      <meshStandardMaterial
+        color={color}
+        metalness={0.1}
+        roughness={0.7}
+        transparent
+        opacity={opacity}
+        emissive={new THREE.Color(color).multiplyScalar(0.1)}
+      />
+    );
+  }, [config.color, config.maxHealth, aiState, health]);
+
+  if (!isVisible || health <= 0) {
+    return null;
+  }
 
   return (
-    <RigidBody
-      ref={enemyRef}
-      position={position}
-      type="dynamic"
-      colliders={false}
-      mass={enemyConfig.mass || 1}
-      onCollisionEnter={handleCollision}
-      userData={{
-        type: 'enemy',
-        enemyType: type,
-        damage: enemyConfig.damage,
-        health: health
-      }}
-    >
-      {/* Collider del enemigo */}
-      <CuboidCollider args={enemyConfig.size ?
-        [enemyConfig.size.width/2, enemyConfig.size.height/2, enemyConfig.size.depth/2] :
-        [0.4, 0.4, 0.4]}
-      />
-
-      {/* Mesh visual del enemigo */}
-      <group ref={meshRef}>
-        <mesh castShadow receiveShadow>
-          {getEnemyGeometry()}
-          <meshStandardMaterial
-            color={getEnemyColor(type)}
-            emissive={isAlert ? '#ff2222' : '#000000'}
-            emissiveIntensity={isAlert ? 0.2 : 0}
-            transparent={health < maxHealth}
-            opacity={health / maxHealth}
-          />
-        </mesh>
-
-        {/* Barra de vida */}
-        {health < maxHealth && (
-          <group position={[0, 1, 0]}>
-            <mesh position={[0, 0, 0.01]}>
-              <planeGeometry args={[1, 0.1]} />
-              <meshBasicMaterial color="#ff0000" />
-            </mesh>
-            <mesh position={[(health/maxHealth - 1) * 0.5, 0, 0.02]} scale={[health/maxHealth, 1, 1]}>
-              <planeGeometry args={[1, 0.1]} />
-              <meshBasicMaterial color="#00ff00" />
-            </mesh>
-          </group>
+    <group ref={groupRef} position={[config.position.x, config.position.y, config.position.z]}>
+      <RigidBody
+        ref={rigidBodyRef}
+        type="dynamic"
+        colliders={false}
+        mass={1}
+        onCollisionEnter={handleCollisionEnter}
+        userData={{
+          type: 'enemy',
+          enemyType: config.type,
+          damage: config.damage,
+          id: config.id,
+          position: config.position
+        }}
+      >
+        {config.type === 'flying' ? (
+          <BallCollider args={[config.size.x * 0.6]} />
+        ) : (
+          <CapsuleCollider args={[config.size.x * 0.5, config.size.y * 0.5]} />
         )}
 
-        {/* Ojos del enemigo */}
-        <mesh position={[-0.2, 0.2, 0.4]} castShadow>
-          <sphereGeometry args={[0.05]} />
-          <meshStandardMaterial color="#ffffff" />
-        </mesh>
-        <mesh position={[0.2, 0.2, 0.4]} castShadow>
-          <sphereGeometry args={[0.05]} />
-          <meshStandardMaterial color="#ffffff" />
+        <mesh ref={meshRef} castShadow receiveShadow>
+          {getGeometry()}
+          {getMaterial()}
         </mesh>
 
-        {/* Pupilas */}
-        <mesh position={[-0.2, 0.2, 0.45]} castShadow>
-          <sphereGeometry args={[0.02]} />
-          <meshStandardMaterial color={isAlert ? "#ff0000" : "#000000"} />
-        </mesh>
-        <mesh position={[0.2, 0.2, 0.45]} castShadow>
-          <sphereGeometry args={[0.02]} />
-          <meshStandardMaterial color={isAlert ? "#ff0000" : "#000000"} />
-        </mesh>
-
-        {/* Efecto de ataque */}
-        {isAttacking && (
-          <mesh>
-            <sphereGeometry args={[1.2]} />
-            <meshBasicMaterial
-              color="#ff0000"
-              transparent
-              opacity={0.3}
-              wireframe
-            />
-          </mesh>
-        )}
-
-        {/* Indicador de estado */}
-        {isAlert && (
-          <mesh position={[0, 1.2, 0]}>
-            <coneGeometry args={[0.1, 0.2]} />
-            <meshBasicMaterial color="#ff0000" />
-          </mesh>
-        )}
-
-        {/* Partículas para enemigos voladores */}
-        {type === 'flying' && (
-          <group>
-            {[...Array(4)].map((_, i) => {
-              const angle = (i / 4) * Math.PI * 2;
-              const x = Math.cos(angle) * 0.8;
-              const z = Math.sin(angle) * 0.8;
-
-              return (
-                <mesh key={i} position={[x, 0, z]}>
-                  <sphereGeometry args={[0.02]} />
-                  <meshBasicMaterial
-                    color="#44ff44"
-                    transparent
-                    opacity={0.8}
-                  />
-                </mesh>
-              );
-            })}
-          </group>
-        )}
-      </group>
-    </RigidBody>
+        {/* Enemy Effects */}
+        <EnemyEffects
+          type={config.type}
+          aiState={aiState}
+          health={health}
+          maxHealth={config.maxHealth}
+          size={config.size}
+        />
+      </RigidBody>
+    </group>
   );
 }
 
-export default EnemyManager;
+// ========================================
+// ✨ EFECTOS DE ENEMIGOS
+// ========================================
+
+function EnemyEffects({ type, aiState, health, maxHealth, size }) {
+  const effectRef = useRef();
+
+  useFrame((state) => {
+    if (!effectRef.current) return;
+
+    const time = state.clock.elapsedTime;
+
+    switch (aiState) {
+      case 'chase':
+        // Angry eyes effect
+        effectRef.current.visible = Math.sin(time * 10) > 0;
+        break;
+      case 'attack':
+        // Attack warning effect
+        effectRef.current.scale.setScalar(1 + Math.sin(time * 15) * 0.3);
+        break;
+      case 'hurt':
+        // Damage flash effect
+        effectRef.current.visible = Math.sin(time * 20) > 0;
+        break;
+      default:
+        effectRef.current.visible = true;
+        effectRef.current.scale.setScalar(1);
+    }
+  });
+
+  const healthPercent = health / maxHealth;
+
+  return (
+    <group ref={effectRef}>
+      {/* Health Bar */}
+      <HealthBar health={healthPercent} size={size} />
+
+      {/* Type-specific effects */}
+      {type === 'fire' && <FireEnemyEffect size={size} />}
+      {type === 'fast' && <SpeedTrailEffect size={size} />}
+      {type === 'flying' && <FlyingParticles size={size} />}
+
+      {/* State effects */}
+      {aiState === 'chase' && <AngryEyes size={size} />}
+      {aiState === 'attack' && <AttackWarning size={size} />}
+    </group>
+  );
+}
+
+// ========================================
+// ❤️ BARRA DE VIDA DEL ENEMIGO
+// ========================================
+
+function HealthBar({ health, size }) {
+  if (health >= 1) return null; // Don't show full health bar
+
+  return (
+    <group position={[0, size.y + 0.5, 0]}>
+      <mesh>
+        <planeGeometry args={[1, 0.1]} />
+        <meshBasicMaterial color={0x444444} transparent opacity={0.8} />
+      </mesh>
+      <mesh position={[-(1 - health) / 2, 0, 0.01]}>
+        <planeGeometry args={[health, 0.08]} />
+        <meshBasicMaterial
+          color={health > 0.5 ? 0x00ff00 : health > 0.25 ? 0xffff00 : 0xff0000}
+          transparent
+          opacity={0.9}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+// ========================================
+// 🔥 EFECTO DE ENEMIGO DE FUEGO
+// ========================================
+
+function FireEnemyEffect({ size }) {
+  const particlesRef = useRef();
+  const particleCount = 20;
+  const positions = useMemo(() => new Float32Array(particleCount * 3), []);
+
+  useFrame((state, delta) => {
+    if (!particlesRef.current) return;
+
+    const time = state.clock.elapsedTime;
+
+    for (let i = 0; i < particleCount; i++) {
+      const i3 = i * 3;
+      positions[i3] = Math.sin(time * 2 + i) * size.x * 0.3;
+      positions[i3 + 1] = size.y * 0.5 + Math.sin(time * 3 + i) * 0.2;
+      positions[i3 + 2] = Math.cos(time * 2 + i) * size.z * 0.3;
+    }
+
+    particlesRef.current.geometry.attributes.position.needsUpdate = true;
+  });
+
+  return (
+    <points ref={particlesRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          array={positions}
+          count={particleCount}
+          itemSize={3}
+        />
+      </bufferGeometry>
+      <pointsMaterial
+        size={0.1}
+        color={0xff4500}
+        transparent
+        opacity={0.8}
+        blending={THREE.AdditiveBlending}
+      />
+    </points>
+  );
+}
+
+// ========================================
+// 💨 EFECTO DE ESTELA DE VELOCIDAD
+// ========================================
+
+function SpeedTrailEffect({ size }) {
+  return (
+    <group position={[0, 0, -size.z]}>
+      <mesh>
+        <coneGeometry args={[0.1, size.z * 0.5, 4]} />
+        <meshBasicMaterial
+          color={0x00ffff}
+          transparent
+          opacity={0.6}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+// ========================================
+// 🌪️ PARTÍCULAS VOLADORAS
+// ========================================
+
+function FlyingParticles({ size }) {
+  const particlesRef = useRef();
+  const particleCount = 12;
+  const positions = useMemo(() => new Float32Array(particleCount * 3), []);
+
+  useFrame((state) => {
+    if (!particlesRef.current) return;
+
+    const time = state.clock.elapsedTime;
+
+    for (let i = 0; i < particleCount; i++) {
+      const i3 = i * 3;
+      const angle = (i / particleCount) * Math.PI * 2 + time;
+      const radius = size.x;
+
+      positions[i3] = Math.cos(angle) * radius;
+      positions[i3 + 1] = Math.sin(time * 2 + i) * 0.3;
+      positions[i3 + 2] = Math.sin(angle) * radius;
+    }
+
+    particlesRef.current.geometry.attributes.position.needsUpdate = true;
+  });
+
+  return (
+    <points ref={particlesRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          array={positions}
+          count={particleCount}
+          itemSize={3}
+        />
+      </bufferGeometry>
+      <pointsMaterial
+        size={0.05}
+        color={0x88aaff}
+        transparent
+        opacity={0.7}
+      />
+    </points>
+  );
+}
+
+// ========================================
+// 👀 OJOS ENOJADOS
+// ========================================
+
+function AngryEyes({ size }) {
+  return (
+    <group position={[0, size.y * 0.3, size.z * 0.4]}>
+      <mesh position={[-0.15, 0, 0]}>
+        <sphereGeometry args={[0.05, 8, 8]} />
+        <meshBasicMaterial color={0xff0000} />
+      </mesh>
+      <mesh position={[0.15, 0, 0]}>
+        <sphereGeometry args={[0.05, 8, 8]} />
+        <meshBasicMaterial color={0xff0000} />
+      </mesh>
+    </group>
+  );
+}
+
+// ========================================
+// ⚠️ ADVERTENCIA DE ATAQUE
+// ========================================
+
+function AttackWarning({ size }) {
+  return (
+    <group position={[0, size.y + 0.3, 0]}>
+      <mesh>
+        <coneGeometry args={[0.2, 0.4, 3]} />
+        <meshBasicMaterial
+          color={0xff0000}
+          transparent
+          opacity={0.8}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+// ========================================
+// 🛠️ UTILITY FUNCTIONS
+// ========================================
+
+function generateProceduralEnemies(level) {
+  const enemies = [];
+  const enemyCount = Math.min(5 + level * 2, 20);
+
+  for (let i = 0; i < enemyCount; i++) {
+    const distance = MathUtils.randomFloat(10, 25);
+    const angle = Math.random() * Math.PI * 2;
+
+    const x = Math.cos(angle) * distance;
+    const z = Math.sin(angle) * distance;
+    const y = 1;
+
+    const type = getRandomEnemyType(level);
+    const config = gameConfig.enemies.types[type] || {};
+
+    enemies.push({
+      id: `enemy-${i}`,
+      type,
+      position: { x, y, z },
+      maxHealth: config.health || 30,
+      speed: config.speed || 2,
+      damage: config.damage || 10,
+      attackRange: config.attackRange || 1.5,
+      detectionRange: config.detectionRange || 8,
+      scoreValue: config.scoreValue || 100,
+      size: config.size || { x: 1, y: 1, z: 1 },
+      color: config.color || 0xff4444,
+      behavior: getRandomBehavior()
+    });
+  }
+
+  return enemies;
+}
+
+function getRandomEnemyType(level) {
+  const rand = Math.random();
+
+  if (level > 3 && rand < 0.1) return 'heavy';
+  if (level > 2 && rand < 0.2) return 'flying';
+  if (level > 1 && rand < 0.3) return 'fast';
+
+  return 'basic';
+}
+
+function getRandomBehavior() {
+  const behaviors = ['aggressive', 'patrol', 'guard'];
+  return behaviors[Math.floor(Math.random() * behaviors.length)];
+}
+
+export default Enemies;

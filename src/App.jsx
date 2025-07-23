@@ -1,610 +1,637 @@
 /* ============================================================================ */
-/* 🎮 CRASH WORM 3D - APLICACIÓN PRINCIPAL */
+/* 🎮 CRASH WORM 3D - COMPONENTE PRINCIPAL DE LA APLICACIÓN */
 /* ============================================================================ */
+/* Ubicación: src/App.jsx */
 
-import React, { Suspense, useEffect, useState, useCallback, useRef } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { Physics } from '@react-three/rapier';
+import React, { useEffect, useState, useCallback, Suspense } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
-import { useGame, GAME_STATES } from './context/GameContext.jsx';
-import useGameEngine from './hooks/useGameEngine.js';
-import useAudioManager from './hooks/useAudioManager.js';
-import useNetworkSync from './hooks/useNetworkSync.js';
 
-// Importaciones lazy para optimización
-const LoadingScreen = React.lazy(() => import('./components/LoadingScreen.jsx'));
-const MainMenu = React.lazy(() => import('./components/MainMenu.jsx'));
-const GameWorld = React.lazy(() => import('./components/GameWorld.jsx'));
-const GameUI = React.lazy(() => import('./components/GameUI.jsx'));
-const PauseMenu = React.lazy(() => import('./components/PauseMenu.jsx'));
+// Context Provider
+import { GameProvider, useGameContext } from './context/GameContext';
+
+// Core Components
+import GameWorld from './components/GameWorld';
+import GameUI from './components/GameUI';
+import MainMenu from './components/MainMenu';
+import LoadingScreen from './components/LoadingScreen';
+
+// Hooks
+import { useAudioManager } from './hooks/useAudioManager';
+import { useNetworkSync } from './hooks/useNetworkSync';
+
+// Utils
+import { DeviceUtils, StorageUtils, DebugUtils } from './utils/gameUtils';
+import { gameConfig } from './data/gameConfig';
+
+// Styles
+import './styles/globals.css';
 
 // ========================================
-// 🎮 COMPONENTE PRINCIPAL DE LA APLICACIÓN
+// 🎮 COMPONENTE PRINCIPAL DE LA APP
 // ========================================
 
 function App() {
-  const { state, actions, utils } = useGame();
-  const {
-    engine,
-    isInitialized: isEngineReady,
-    startEngine,
-    stopEngine,
-    pauseEngine,
-    resumeEngine,
-    performance
-  } = useGameEngine();
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [initializationError, setInitializationError] = useState(null);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingMessage, setLoadingMessage] = useState('Initializing...');
 
-  const {
-    isInitialized: isAudioReady,
-    playSound,
-    setMasterVolume
-  } = useAudioManager();
-
-  const {
-    isConnected: isNetworkConnected,
-    latency
-  } = useNetworkSync();
-
-  // Estados de la aplicación
-  const [isAppReady, setIsAppReady] = useState(false);
-  const [error, setError] = useState(null);
-  const [performanceMode, setPerformanceMode] = useState('auto');
-  const [debugMode, setDebugMode] = useState(import.meta.env.DEV);
-
-  // Referencias
-  const canvasRef = useRef();
-  const frameCountRef = useRef(0);
-  const lastPerformanceCheck = useRef(Date.now());
-
-  // ========================================
-  // 🚀 INICIALIZACIÓN DE LA APLICACIÓN
-  // ========================================
-
+  // Initialize application
   useEffect(() => {
-    const initializeApp = async () => {
-      try {
-        console.log('🎮 Initializing Crash Worm 3D...');
-
-        // Esperar a que todos los sistemas estén listos
-        await waitForSystems();
-
-        // Configurar la aplicación
-        setupApplicationSystems();
-
-        // Configurar manejo de errores globales
-        setupErrorHandling();
-
-        // Configurar optimizaciones de rendimiento
-        setupPerformanceOptimizations();
-
-        setIsAppReady(true);
-        console.log('✅ Application initialized successfully');
-
-      } catch (error) {
-        console.error('❌ Failed to initialize application:', error);
-        setError(error);
-      }
-    };
-
-    initializeApp();
+    initializeApplication();
   }, []);
 
-  const waitForSystems = async () => {
-    return new Promise((resolve) => {
-      const checkSystems = () => {
-        if (isEngineReady && isAudioReady) {
-          resolve();
-        } else {
-          setTimeout(checkSystems, 100);
-        }
-      };
-      checkSystems();
-    });
-  };
+  const initializeApplication = async () => {
+    try {
+      setLoadingMessage('Setting up environment...');
+      setLoadingProgress(10);
 
-  const setupApplicationSystems = () => {
-    // Configurar volumen inicial
-    setMasterVolume(state.masterVolume);
+      // Detect device capabilities
+      const deviceConfig = DeviceUtils.getDeviceConfig();
+      DebugUtils.log('Device configuration:', deviceConfig);
 
-    // Configurar modo de rendimiento automático
-    detectAndSetPerformanceMode();
+      setLoadingMessage('Loading game assets...');
+      setLoadingProgress(30);
 
-    // Configurar listeners de visibilidad
-    setupVisibilityHandling();
+      // Preload critical assets
+      await preloadAssets();
 
-    // Configurar auto-guardado
-    setupAutoSave();
-  };
+      setLoadingMessage('Initializing audio system...');
+      setLoadingProgress(50);
 
-  const setupErrorHandling = () => {
-    window.addEventListener('error', handleGlobalError);
-    window.addEventListener('unhandledrejection', handleUnhandledRejection);
-  };
+      // Initialize subsystems
+      await initializeSubsystems();
 
-  const setupPerformanceOptimizations = () => {
-    // Configurar observador de rendimiento
-    if ('PerformanceObserver' in window) {
-      const observer = new PerformanceObserver((list) => {
-        const entries = list.getEntries();
-        entries.forEach((entry) => {
-          if (entry.entryType === 'measure') {
-            // Monitorear métricas de rendimiento
-            if (entry.duration > 16.67) { // Mayor a 60 FPS
-              console.warn(`Performance warning: ${entry.name} took ${entry.duration}ms`);
-            }
-          }
-        });
-      });
-      observer.observe({ entryTypes: ['measure', 'navigation'] });
+      setLoadingMessage('Setting up game engine...');
+      setLoadingProgress(70);
+
+      // Setup error handling
+      setupErrorHandling();
+
+      setLoadingMessage('Applying settings...');
+      setLoadingProgress(85);
+
+      // Apply saved settings
+      await applySavedSettings();
+
+      setLoadingMessage('Ready to play!');
+      setLoadingProgress(100);
+
+      // Small delay for smooth transition
+      setTimeout(() => {
+        setIsInitialized(true);
+      }, 500);
+
+    } catch (error) {
+      DebugUtils.error('Failed to initialize application:', error);
+      setInitializationError(error);
     }
   };
 
-  // ========================================
-  // 🎯 MANEJO DE EVENTOS GLOBALES
-  // ========================================
+  const preloadAssets = async () => {
+    // Simulate asset loading - in a real game, this would load textures, models, sounds, etc.
+    const assets = [
+      'textures/grass.jpg',
+      'textures/stone.jpg',
+      'audio/jump.wav',
+      'audio/collect.wav',
+      'models/player.glb'
+    ];
 
-  const handleKeyDown = useCallback((event) => {
-    // Prevenir comportamientos por defecto para ciertas teclas
-    if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) {
-      event.preventDefault();
+    for (let i = 0; i < assets.length; i++) {
+      // Simulate loading each asset
+      await new Promise(resolve => setTimeout(resolve, 100));
+      setLoadingProgress(30 + (i / assets.length) * 20);
     }
+  };
 
-    switch (event.code) {
-      case 'Escape':
-        if (utils.isPlaying) {
-          pauseEngine();
-          actions.pauseGame();
-          playSound('click');
-        } else if (utils.isPaused) {
-          resumeEngine();
-          actions.resumeGame();
-          playSound('click');
-        }
-        break;
-
-      case 'F11':
-        event.preventDefault();
-        toggleFullscreen();
-        break;
-
-      case 'KeyM':
-        if (event.ctrlKey) {
-          event.preventDefault();
-          actions.toggleSound();
-          playSound('click');
-        }
-        break;
-
-      case 'F1':
-        if (debugMode) {
-          event.preventDefault();
-          toggleDebugMode();
-        }
-        break;
-    }
-  }, [utils.isPlaying, utils.isPaused, actions, pauseEngine, resumeEngine, playSound, debugMode]);
-
-  const handleVisibilityChange = useCallback(() => {
-    if (document.hidden) {
-      if (utils.isPlaying) {
-        pauseEngine();
-        actions.pauseGame();
-      }
-    }
-  }, [utils.isPlaying, actions, pauseEngine]);
-
-  const handleBeforeUnload = useCallback((event) => {
-    if (utils.isPlaying && state.saveData.autoSave) {
-      actions.saveProgress();
-    }
-
-    // Limpiar recursos
-    stopEngine();
-  }, [utils.isPlaying, state.saveData.autoSave, actions, stopEngine]);
-
-  const handleGlobalError = useCallback((event) => {
-    console.error('🚨 Global error:', event.error);
-    setError(event.error);
-  }, []);
-
-  const handleUnhandledRejection = useCallback((event) => {
-    console.error('🚨 Unhandled promise rejection:', event.reason);
-    setError(new Error(`Unhandled rejection: ${event.reason}`));
-  }, []);
-
-  // ========================================
-  // ⚙️ CONFIGURACIONES Y UTILIDADES
-  // ========================================
-
-  const detectAndSetPerformanceMode = useCallback(() => {
+  const initializeSubsystems = async () => {
+    // Initialize WebGL context check
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
 
     if (!gl) {
-      setPerformanceMode('low');
-      return;
+      throw new Error('WebGL not supported');
     }
 
-    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-    const renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : '';
-
-    // Detectar GPU y ajustar calidad
-    if (renderer.includes('Intel') && !renderer.includes('Iris')) {
-      setPerformanceMode('low');
-    } else if (renderer.includes('GTX') || renderer.includes('RTX') || renderer.includes('RX')) {
-      setPerformanceMode('high');
-    } else {
-      setPerformanceMode('medium');
+    // Check for required extensions
+    const requiredExtensions = ['OES_element_index_uint'];
+    for (const ext of requiredExtensions) {
+      if (!gl.getExtension(ext)) {
+        DebugUtils.warn(`Extension ${ext} not available`);
+      }
     }
 
-    console.log(`🎨 Performance mode set to: ${performanceMode}`);
-  }, [performanceMode]);
-
-  const setupVisibilityHandling = useCallback(() => {
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-  }, [handleVisibilityChange]);
-
-  const setupAutoSave = useCallback(() => {
-    if (state.saveData.autoSave) {
-      setInterval(() => {
-        if (utils.isPlaying) {
-          actions.saveProgress();
-        }
-      }, 30000); // Auto-save cada 30 segundos
-    }
-  }, [state.saveData.autoSave, utils.isPlaying, actions]);
-
-  const toggleFullscreen = useCallback(() => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(err => {
-        console.warn('Error entering fullscreen:', err);
-      });
-    } else {
-      document.exitFullscreen().catch(err => {
-        console.warn('Error exiting fullscreen:', err);
-      });
-    }
-  }, []);
-
-  const toggleDebugMode = useCallback(() => {
-    setDebugMode(prev => !prev);
-    playSound('click');
-  }, [playSound]);
-
-  // ========================================
-  // 🔄 CONFIGURACIÓN DE EVENT LISTENERS
-  // ========================================
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('error', handleGlobalError);
-      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    // Performance adaptation
+    const renderer = {
+      antialias: gl.getParameter(gl.MAX_TEXTURE_SIZE) >= 4096,
+      shadows: !DeviceUtils.isMobile(),
+      particles: !DeviceUtils.isMobile() || gl.getParameter(gl.MAX_TEXTURE_SIZE) >= 2048
     };
-  }, [handleKeyDown, handleBeforeUnload, handleGlobalError, handleUnhandledRejection, handleVisibilityChange]);
+
+    DebugUtils.log('Renderer capabilities:', renderer);
+  };
+
+  const setupErrorHandling = () => {
+    // Global error handler
+    window.addEventListener('error', (event) => {
+      DebugUtils.error('Global error:', event.error);
+
+      // Report to analytics if enabled
+      if (gameConfig.analytics.enabled) {
+        // Analytics reporting would go here
+      }
+    });
+
+    // Unhandled promise rejections
+    window.addEventListener('unhandledrejection', (event) => {
+      DebugUtils.error('Unhandled promise rejection:', event.reason);
+      event.preventDefault();
+    });
+  };
+
+  const applySavedSettings = async () => {
+    // Load saved settings from localStorage
+    const savedSettings = StorageUtils.getItem('crashWorm3D_settings');
+
+    if (savedSettings) {
+      DebugUtils.log('Applying saved settings:', savedSettings);
+      // Settings will be applied by the GameProvider
+    }
+
+    // Apply device-specific optimizations
+    if (DeviceUtils.isMobile()) {
+      // Mobile optimizations
+      document.body.style.userSelect = 'none';
+      document.body.style.touchAction = 'none';
+    }
+  };
+
+  // Error boundary fallback
+  const ErrorFallback = ({ error, resetErrorBoundary }) => (
+    <div className="error-screen">
+      <div className="error-content">
+        <h2>🚨 Game Error</h2>
+        <p>Something went wrong. Don't worry, your progress is saved!</p>
+        <details style={{ whiteSpace: 'pre-wrap', marginTop: '1rem' }}>
+          <summary>Error details</summary>
+          {error.message}
+        </details>
+        <div className="error-actions">
+          <button className="btn btn-primary" onClick={resetErrorBoundary}>
+            Try Again
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => window.location.reload()}
+          >
+            Reload Game
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Show error screen if initialization failed
+  if (initializationError) {
+    return (
+      <div className="error-screen">
+        <div className="error-content">
+          <h2>🚨 Initialization Error</h2>
+          <p>Failed to start the game. Please try refreshing the page.</p>
+          <details style={{ whiteSpace: 'pre-wrap', marginTop: '1rem' }}>
+            <summary>Error details</summary>
+            {initializationError.message}
+          </details>
+          <button
+            className="btn btn-primary"
+            onClick={() => window.location.reload()}
+          >
+            Refresh Page
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading screen during initialization
+  if (!isInitialized) {
+    return (
+      <LoadingScreen
+        progress={loadingProgress}
+        message={loadingMessage}
+        onComplete={() => setIsInitialized(true)}
+      />
+    );
+  }
+
+  // Main application
+  return (
+    <ErrorBoundary FallbackComponent={ErrorFallback} onError={DebugUtils.error}>
+      <GameProvider>
+        <AppContent />
+      </GameProvider>
+    </ErrorBoundary>
+  );
+}
+
+// ========================================
+// 📱 CONTENIDO PRINCIPAL DE LA APP
+// ========================================
+
+function AppContent() {
+  const {
+    gameState,
+    setGameState,
+    showNotification,
+    settings,
+    toggleUI
+  } = useGameContext();
+
+  const [isLoadingGame, setIsLoadingGame] = useState(false);
+  const [gameLoadProgress, setGameLoadProgress] = useState(0);
+
+  // Audio manager
+  const { isInitialized: audioInitialized, playSound } = useAudioManager();
+
+  // Network sync
+  const { connectionState } = useNetworkSync();
 
   // ========================================
-  // 📊 MONITOREO DE RENDIMIENTO
+  // 🎮 GAME STATE MANAGEMENT
+  // ========================================
+
+  const handleGameStateChange = useCallback(async (newState) => {
+    const previousState = gameState;
+
+    DebugUtils.log(`Game state change: ${previousState} -> ${newState}`);
+
+    switch (newState) {
+      case 'LOADING':
+        await handleLoadingState();
+        break;
+      case 'PLAYING':
+        await handlePlayingState();
+        break;
+      case 'PAUSED':
+        handlePausedState();
+        break;
+      case 'GAME_OVER':
+        handleGameOverState();
+        break;
+      case 'MAIN_MENU':
+        handleMainMenuState();
+        break;
+    }
+
+    setGameState(newState);
+  }, [gameState, setGameState]);
+
+  const handleLoadingState = async () => {
+    setIsLoadingGame(true);
+    setGameLoadProgress(0);
+
+    try {
+      // Simulate game loading process
+      const loadingSteps = [
+        { message: 'Generating world...', duration: 800 },
+        { message: 'Spawning entities...', duration: 600 },
+        { message: 'Loading audio...', duration: 400 },
+        { message: 'Initializing physics...', duration: 500 },
+        { message: 'Setting up networking...', duration: 300 },
+        { message: 'Finalizing...', duration: 200 }
+      ];
+
+      for (let i = 0; i < loadingSteps.length; i++) {
+        const step = loadingSteps[i];
+        setGameLoadProgress((i / loadingSteps.length) * 100);
+
+        await new Promise(resolve => setTimeout(resolve, step.duration));
+      }
+
+      setGameLoadProgress(100);
+
+      // Transition to playing state
+      setTimeout(() => {
+        setIsLoadingGame(false);
+        setGameState('PLAYING');
+      }, 500);
+
+    } catch (error) {
+      DebugUtils.error('Failed to load game:', error);
+      showNotification({
+        message: 'Failed to load game. Please try again.',
+        type: 'error',
+        icon: '❌'
+      });
+      setGameState('MAIN_MENU');
+      setIsLoadingGame(false);
+    }
+  };
+
+  const handlePlayingState = async () => {
+    playSound('game_start', { volume: 0.5 });
+
+    showNotification({
+      message: 'Game started! Good luck!',
+      type: 'success',
+      icon: '🎮',
+      duration: 2000
+    });
+
+    // Auto-save setup
+    if (settings.gameplay.autoSave) {
+      setupAutoSave();
+    }
+  };
+
+  const handlePausedState = () => {
+    playSound('game_pause', { volume: 0.3 });
+    toggleUI('showPauseMenu', true);
+  };
+
+  const handleGameOverState = () => {
+    playSound('game_over', { volume: 0.6 });
+
+    showNotification({
+      message: 'Game Over! Thanks for playing!',
+      type: 'info',
+      icon: '🎯',
+      duration: 3000
+    });
+
+    // Save final score
+    saveGameStats();
+  };
+
+  const handleMainMenuState = () => {
+    // Clean up game state
+    setIsLoadingGame(false);
+    setGameLoadProgress(0);
+  };
+
+  // ========================================
+  // 💾 SAVE SYSTEM
+  // ========================================
+
+  const setupAutoSave = () => {
+    const autoSaveInterval = setInterval(() => {
+      if (gameState === 'PLAYING') {
+        saveGameState();
+      } else {
+        clearInterval(autoSaveInterval);
+      }
+    }, 30000); // Auto-save every 30 seconds
+  };
+
+  const saveGameState = () => {
+    try {
+      const gameData = {
+        timestamp: Date.now(),
+        // Game state data would go here
+        // player position, score, level, etc.
+      };
+
+      StorageUtils.setItem('crashWorm3D_saveGame', gameData);
+      DebugUtils.log('Game auto-saved');
+
+    } catch (error) {
+      DebugUtils.error('Failed to auto-save game:', error);
+    }
+  };
+
+  const saveGameStats = () => {
+    try {
+      const stats = StorageUtils.getItem('crashWorm3D_stats', {
+        gamesPlayed: 0,
+        totalScore: 0,
+        bestScore: 0,
+        totalPlayTime: 0
+      });
+
+      // Update stats
+      stats.gamesPlayed += 1;
+      // Add current game stats...
+
+      StorageUtils.setItem('crashWorm3D_stats', stats);
+      DebugUtils.log('Game stats saved');
+
+    } catch (error) {
+      DebugUtils.error('Failed to save game stats:', error);
+    }
+  };
+
+  // ========================================
+  // ⌨️ KEYBOARD SHORTCUTS
   // ========================================
 
   useEffect(() => {
-    const monitorPerformance = () => {
-      frameCountRef.current++;
-
-      const now = Date.now();
-      if (now - lastPerformanceCheck.current > 5000) { // Cada 5 segundos
-        const fps = (frameCountRef.current * 1000) / (now - lastPerformanceCheck.current);
-
-        // Ajustar calidad automáticamente si es necesario
-        if (performanceMode === 'auto') {
-          if (fps < 30 && performanceMode !== 'low') {
-            setPerformanceMode('low');
-            console.log('🔽 Performance mode lowered due to low FPS');
-          } else if (fps > 55 && performanceMode !== 'high') {
-            setPerformanceMode('high');
-            console.log('🔼 Performance mode raised due to good FPS');
+    const handleKeyDown = (event) => {
+      // Global keyboard shortcuts
+      switch (event.key) {
+        case 'Escape':
+          if (gameState === 'PLAYING') {
+            handleGameStateChange('PAUSED');
+          } else if (gameState === 'PAUSED') {
+            handleGameStateChange('PLAYING');
           }
-        }
+          break;
 
-        frameCountRef.current = 0;
-        lastPerformanceCheck.current = now;
+        case 'F11':
+          event.preventDefault();
+          if (DeviceUtils.isFullscreen()) {
+            DeviceUtils.exitFullscreen();
+          } else {
+            DeviceUtils.requestFullscreen();
+          }
+          break;
+
+        case 'F1':
+          event.preventDefault();
+          toggleUI('showSettings', true);
+          break;
+
+        default:
+          break;
       }
     };
 
-    const interval = setInterval(monitorPerformance, 100);
-    return () => clearInterval(interval);
-  }, [performanceMode]);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [gameState, handleGameStateChange, toggleUI]);
 
   // ========================================
-  // 🎨 CONFIGURACIÓN DEL CANVAS
+  // 📱 VISIBILITY CHANGE HANDLING
   // ========================================
 
-  const getCanvasConfig = useCallback(() => {
-    const baseConfig = {
-      camera: {
-        position: [0, 5, 10],
-        fov: 75,
-        near: 0.1,
-        far: 1000
-      },
-      shadows: performanceMode !== 'low',
-      gl: {
-        antialias: performanceMode === 'high',
-        alpha: false,
-        powerPreference: 'high-performance',
-        stencil: false,
-        depth: true
-      },
-      performance: {
-        min: performanceMode === 'low' ? 0.2 : 0.5
-      },
-      dpr: performanceMode === 'low' ? 1 : Math.min(window.devicePixelRatio, 2)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && gameState === 'PLAYING') {
+        // Auto-pause when tab becomes hidden
+        handleGameStateChange('PAUSED');
+
+        showNotification({
+          message: 'Game paused - tab not visible',
+          type: 'info',
+          icon: '⏸️',
+          duration: 1000
+        });
+      }
     };
 
-    return baseConfig;
-  }, [performanceMode]);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [gameState, handleGameStateChange, showNotification]);
 
   // ========================================
-  // 🚨 COMPONENTE DE ERROR
+  // 🌐 NETWORK STATUS MONITORING
   // ========================================
 
-  if (error) {
-    return <ErrorFallback error={error} onReset={() => setError(null)} />;
-  }
+  useEffect(() => {
+    if (connectionState === 'connected') {
+      showNotification({
+        message: 'Connected to multiplayer server',
+        type: 'success',
+        icon: '🌐',
+        duration: 2000
+      });
+    } else if (connectionState === 'error') {
+      showNotification({
+        message: 'Connection lost. Playing offline.',
+        type: 'warning',
+        icon: '📡',
+        duration: 3000
+      });
+    }
+  }, [connectionState, showNotification]);
 
   // ========================================
-  // 🔄 PANTALLA DE CARGA
+  // 🎨 RENDER MAIN CONTENT
   // ========================================
 
-  if (!isAppReady || utils.isLoading) {
-    return (
-      <Suspense fallback={<SimpleFallback message="Loading application..." />}>
-        <LoadingScreen />
-      </Suspense>
-    );
-  }
+  const renderGameContent = () => {
+    switch (gameState) {
+      case 'MAIN_MENU':
+        return <MainMenu />;
 
-  // ========================================
-  // 🏠 MENÚ PRINCIPAL
-  // ========================================
-
-  if (utils.isInMenu) {
-    return (
-      <div className="app">
-        <Suspense fallback={<SimpleFallback message="Loading menu..." />}>
-          <MainMenu />
-        </Suspense>
-
-        {/* Información de debug */}
-        {debugMode && <DebugOverlay performance={performance} network={{ isConnected: isNetworkConnected, latency }} />}
-      </div>
-    );
-  }
-
-  // ========================================
-  // 🎮 JUEGO ACTIVO
-  // ========================================
-
-  return (
-    <div className="app">
-      <ErrorBoundary FallbackComponent={GameErrorFallback}>
-        {/* Canvas 3D principal */}
-        <Canvas
-          ref={canvasRef}
-          {...getCanvasConfig()}
-          onCreated={({ gl, scene, camera }) => {
-            // Configuraciones del renderer
-            gl.setClearColor('#000011');
-            gl.shadowMap.enabled = performanceMode !== 'low';
-            gl.shadowMap.type = THREE.PCFSoftShadowMap;
-            gl.outputColorSpace = THREE.SRGBColorSpace;
-            gl.toneMapping = THREE.ACESFilmicToneMapping;
-            gl.toneMappingExposure = 1.0;
-
-            // Configurar cámara
-            camera.position.set(...getCanvasConfig().camera.position);
-
-            console.log('🎨 Canvas 3D initialized with', performanceMode, 'quality');
-          }}
-          onError={(error) => {
-            console.error('Canvas error:', error);
-            setError(error);
-          }}
-        >
-          <Suspense fallback={<GameWorldFallback />}>
-            <Physics
-              gravity={[0, -9.81, 0]}
-              debug={debugMode}
-              timeStep={1/60}
-              paused={utils.isPaused}
-            >
-              <GameWorld />
-            </Physics>
-          </Suspense>
-        </Canvas>
-
-        {/* UI del juego */}
-        {(utils.isPlaying || utils.isPaused) && (
-          <Suspense fallback={null}>
-            <GameUI />
-          </Suspense>
-        )}
-
-        {/* Menú de pausa */}
-        {utils.isPaused && (
-          <Suspense fallback={null}>
-            <PauseMenu />
-          </Suspense>
-        )}
-
-        {/* Overlays de estado del juego */}
-        <GameStateOverlays />
-
-        {/* Información de debug */}
-        {debugMode && (
-          <DebugOverlay
-            performance={performance}
-            network={{ isConnected: isNetworkConnected, latency }}
-            canvas={canvasRef.current}
+      case 'LOADING':
+        return (
+          <LoadingScreen
+            progress={gameLoadProgress}
+            message="Loading game world..."
+            onComplete={() => {}} // Handled by handleLoadingState
           />
-        )}
-      </ErrorBoundary>
-    </div>
-  );
-}
+        );
 
-// ========================================
-// 🎮 OVERLAYS DE ESTADO DEL JUEGO
-// ========================================
+      case 'PLAYING':
+      case 'PAUSED':
+      case 'GAME_OVER':
+        return (
+          <>
+            <Suspense fallback={<div>Loading game world...</div>}>
+              <GameWorld />
+            </Suspense>
+            <GameUI />
+          </>
+        );
 
-function GameStateOverlays() {
-  const { state, actions, utils } = useGame();
+      default:
+        return <MainMenu />;
+    }
+  };
 
   return (
-    <>
-      {/* Overlay de game over */}
-      {utils.isGameOver && (
-        <div className="overlay fade-in">
-          <div className="modal card">
-            <h2 className="menu-title">💀 Game Over</h2>
-            <div className="game-over-stats">
-              <p>Score: {state.score.toLocaleString()}</p>
-              <p>Level: {state.level}</p>
-              <p>Time: {Math.floor(state.timeElapsed / 60)}:{Math.floor(state.timeElapsed % 60).toString().padStart(2, '0')}</p>
-              <p>Best Score: {state.bestScore.toLocaleString()}</p>
-            </div>
-            <div className="menu-buttons">
-              <button
-                className="button button-primary"
-                onClick={actions.resetGame}
-              >
-                🔄 Try Again
-              </button>
-              <button
-                className="button"
-                onClick={actions.goToMenu}
-              >
-                🏠 Main Menu
-              </button>
-            </div>
-          </div>
+    <div className={`app game-state-${gameState.toLowerCase()}`}>
+      {/* Main Game Content */}
+      {renderGameContent()}
+
+      {/* Loading overlay for game state transitions */}
+      {isLoadingGame && (
+        <div className="game-loading-overlay">
+          <LoadingScreen
+            progress={gameLoadProgress}
+            message="Loading game..."
+            onComplete={() => {}}
+          />
         </div>
       )}
 
-      {/* Overlay de victoria */}
-      {utils.isVictory && (
-        <div className="overlay fade-in">
-          <div className="modal card">
-            <h2 className="menu-title">🏆 Victory!</h2>
-            <div className="victory-stats">
-              <p>Final Score: {state.score.toLocaleString()}</p>
-              <p>Level Completed: {state.level}</p>
-              <p>Total Time: {Math.floor(state.timeElapsed / 60)}:{Math.floor(state.timeElapsed % 60).toString().padStart(2, '0')}</p>
-              <p>Collectibles: {state.collectibles}/{state.totalCollectibles}</p>
-              <p>Performance Bonus: {Math.max(0, 1000 - Math.floor(state.timeElapsed))} points</p>
-            </div>
-            <div className="menu-buttons">
-              <button
-                className="button button-primary"
-                onClick={() => {
-                  actions.updateLevel(state.level + 1);
-                  actions.resetGame();
-                }}
-              >
-                ➡️ Next Level
-              </button>
-              <button
-                className="button"
-                onClick={actions.goToMenu}
-              >
-                🏠 Main Menu
-              </button>
-            </div>
-          </div>
+      {/* Global Audio Status */}
+      {!audioInitialized && (
+        <div className="audio-prompt">
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              // Audio initialization is handled by useAudioManager
+              showNotification({
+                message: 'Audio enabled!',
+                type: 'success',
+                icon: '🔊',
+                duration: 1000
+              });
+            }}
+          >
+            🔊 Enable Audio
+          </button>
         </div>
       )}
-    </>
-  );
-}
 
-// ========================================
-// 🐛 OVERLAY DE DEBUG
-// ========================================
+      {/* PWA Install Prompt */}
+      <PWAInstallPrompt />
 
-function DebugOverlay({ performance, network, canvas }) {
-  return (
-    <div className="debug-overlay">
-      <div className="debug-panel">
-        <h3>🐛 Debug Info</h3>
-
-        <div className="debug-section">
-          <h4>Performance</h4>
-          <p>FPS: {Math.round(performance.fps || 0)}</p>
-          <p>Frame Time: {(performance.avgFrameTime || 0).toFixed(2)}ms</p>
-          <p>Entities: {performance.entityCount || 0}</p>
-        </div>
-
-        <div className="debug-section">
-          <h4>Network</h4>
-          <p>Connected: {network.isConnected ? '✅' : '❌'}</p>
-          <p>Latency: {network.latency || 0}ms</p>
-        </div>
-
-        <div className="debug-section">
-          <h4>Memory</h4>
-          <p>Used: {Math.round((performance.memory?.used || 0) / 1024 / 1024)}MB</p>
-          <p>Total: {Math.round((performance.memory?.total || 0) / 1024 / 1024)}MB</p>
-        </div>
-
-        <div className="debug-controls">
-          <p>F1: Toggle Debug | F11: Fullscreen</p>
-          <p>Ctrl+M: Mute | ESC: Pause</p>
-        </div>
-      </div>
+      {/* Performance Warning */}
+      <PerformanceWarning />
     </div>
   );
 }
 
 // ========================================
-// 🚨 COMPONENTES DE ERROR
+// 📱 COMPONENTE DE INSTALACIÓN PWA
 // ========================================
 
-function ErrorFallback({ error, onReset }) {
-  return (
-    <div className="error-screen">
-      <div className="error-content">
-        <h1>⚠️ Something went wrong</h1>
-        <p>An unexpected error occurred in Crash Worm 3D</p>
-        <details className="error-details">
-          <summary>Error Details</summary>
-          <pre>{error.stack}</pre>
-        </details>
-        <div className="error-actions">
-          <button onClick={onReset} className="button button-primary">
-            🔄 Try Again
-          </button>
-          <button onClick={() => window.location.reload()} className="button">
-            🔄 Reload Page
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+function PWAInstallPrompt() {
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
 
-function GameErrorFallback({ error, resetErrorBoundary }) {
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallPrompt(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+
+    if (outcome === 'accepted') {
+      DebugUtils.log('PWA installation accepted');
+    }
+
+    setDeferredPrompt(null);
+    setShowInstallPrompt(false);
+  };
+
+  if (!showInstallPrompt) return null;
+
   return (
-    <div className="game-error">
-      <div className="error-message">
-        <h2>🎮 Game Error</h2>
-        <p>The game encountered an error and needs to restart.</p>
-        <button onClick={resetErrorBoundary} className="button button-primary">
-          🔄 Restart Game
+    <div className="pwa-install-prompt">
+      <div className="pwa-prompt-content">
+        <span>📱 Install Crash Worm 3D for better performance!</span>
+        <button className="btn btn-sm btn-primary" onClick={handleInstallClick}>
+          Install
+        </button>
+        <button
+          className="btn btn-sm btn-secondary"
+          onClick={() => setShowInstallPrompt(false)}
+        >
+          Later
         </button>
       </div>
     </div>
@@ -612,24 +639,39 @@ function GameErrorFallback({ error, resetErrorBoundary }) {
 }
 
 // ========================================
-// ⏳ COMPONENTES FALLBACK
+// ⚠️ ADVERTENCIA DE PERFORMANCE
 // ========================================
 
-function SimpleFallback({ message }) {
-  return (
-    <div className="simple-fallback">
-      <div className="loading-spinner" />
-      <p>{message}</p>
-    </div>
-  );
-}
+function PerformanceWarning() {
+  const { performance } = useGameContext();
+  const [showWarning, setShowWarning] = useState(false);
 
-function GameWorldFallback() {
+  useEffect(() => {
+    if (performance.fps && performance.fps < 20) {
+      setShowWarning(true);
+
+      const timer = setTimeout(() => {
+        setShowWarning(false);
+      }, 5000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [performance.fps]);
+
+  if (!showWarning) return null;
+
   return (
-    <mesh>
-      <boxGeometry args={[2, 2, 2]} />
-      <meshBasicMaterial color="#4488ff" wireframe />
-    </mesh>
+    <div className="performance-warning">
+      <div className="warning-content">
+        ⚠️ Low performance detected. Consider lowering graphics settings.
+        <button
+          className="btn btn-sm btn-secondary"
+          onClick={() => setShowWarning(false)}
+        >
+          Dismiss
+        </button>
+      </div>
+    </div>
   );
 }
 

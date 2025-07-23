@@ -1,109 +1,80 @@
 /* ============================================================================ */
 /* 🎮 CRASH WORM 3D - SISTEMA DE COLECCIONABLES */
 /* ============================================================================ */
+/* Ubicación: src/components/Collectibles.jsx */
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { RigidBody, CuboidCollider } from '@react-three/rapier';
+import { RigidBody, CuboidCollider, BallCollider } from '@react-three/rapier';
 import * as THREE from 'three';
-import { useGame } from '@/context/GameContext';
-import { gameConfig } from '@/data/gameConfig';
-import useAudioManager from '@/hooks/useAudioManager';
+import { useGameContext } from '../context/GameContext';
+import { useAudioManager } from '../hooks/useAudioManager';
+import { gameConfig } from '../data/gameConfig';
+import { MathUtils, VectorUtils, GameUtils } from '../utils/gameUtils';
 
 // ========================================
-// 🏭 MANAGER DE COLECCIONABLES
+// 💎 COMPONENTE PRINCIPAL DE COLECCIONABLES
 // ========================================
 
-export function CollectibleManager({ collectibleSpawns = [], playerRef }) {
+export function Collectibles({ levelData, onCollect, ...props }) {
+  const { currentLevel, player, addScore, addCoins, healPlayer, addPowerUp } = useGameContext();
   const [collectibles, setCollectibles] = useState([]);
-  const { state, utils } = useGame();
-  const nextCollectibleId = useRef(0);
 
-  // Spawn inicial de coleccionables
+  // Generate collectibles based on level data or procedurally
   useEffect(() => {
-    if (collectibleSpawns.length > 0) {
-      const initialCollectibles = collectibleSpawns.map(spawn => ({
-        id: nextCollectibleId.current++,
-        type: spawn.type || 'coin',
-        position: spawn.position,
-        config: spawn.config || {},
-        collected: false,
-        active: true
-      }));
-
-      setCollectibles(initialCollectibles);
+    if (levelData?.collectibles) {
+      setCollectibles(levelData.collectibles);
+    } else {
+      // Procedural collectible generation
+      const generated = generateProceduralCollectibles(currentLevel);
+      setCollectibles(generated);
     }
-  }, [collectibleSpawns]);
+  }, [levelData, currentLevel]);
 
-  // Limpiar coleccionables inactivos
-  useEffect(() => {
-    const cleanupInterval = setInterval(() => {
-      setCollectibles(prev => prev.filter(collectible => collectible.active));
-    }, 10000);
+  const handleCollect = useCallback((collectibleId, collectibleData) => {
+    // Remove collectible from state
+    setCollectibles(prev => prev.filter(item => item.id !== collectibleId));
 
-    return () => clearInterval(cleanupInterval);
-  }, []);
+    // Handle collection effects
+    handleCollectionEffects(collectibleData);
 
-  const spawnCollectible = useCallback((type, position, config = {}) => {
-    const newCollectible = {
-      id: nextCollectibleId.current++,
-      type,
-      position,
-      config,
-      collected: false,
-      active: true
-    };
+    // Notify parent component
+    onCollect?.(collectibleData);
+  }, [onCollect]);
 
-    setCollectibles(prev => [...prev, newCollectible]);
-    return newCollectible.id;
-  }, []);
-
-  const collectItem = useCallback((collectibleId) => {
-    setCollectibles(prev => prev.map(collectible =>
-      collectible.id === collectibleId
-        ? { ...collectible, collected: true, active: false }
-        : collectible
-    ));
-  }, []);
-
-  const spawnRandomCollectibles = useCallback((count = 5, area = { x: 20, z: 20 }) => {
-    const types = ['coin', 'gem', 'powerup'];
-    const newCollectibles = [];
-
-    for (let i = 0; i < count; i++) {
-      const type = types[Math.floor(Math.random() * types.length)];
-      const position = [
-        (Math.random() - 0.5) * area.x,
-        2 + Math.random() * 3,
-        (Math.random() - 0.5) * area.z
-      ];
-
-      newCollectibles.push({
-        id: nextCollectibleId.current++,
-        type,
-        position,
-        config: {},
-        collected: false,
-        active: true
-      });
+  const handleCollectionEffects = useCallback((collectibleData) => {
+    switch (collectibleData.type) {
+      case 'coin':
+        addCoins(collectibleData.value || 1);
+        addScore(collectibleData.scoreValue || 10);
+        break;
+      case 'gem':
+        addCoins(collectibleData.value || 5);
+        addScore(collectibleData.scoreValue || 50);
+        break;
+      case 'heart':
+        healPlayer(collectibleData.healAmount || 25);
+        addScore(collectibleData.scoreValue || 25);
+        break;
+      case 'star':
+        addScore(collectibleData.scoreValue || 100);
+        break;
+      case 'powerup':
+        addPowerUp(collectibleData.powerUp);
+        addScore(collectibleData.scoreValue || 75);
+        break;
+      default:
+        addScore(collectibleData.scoreValue || 10);
     }
-
-    setCollectibles(prev => [...prev, ...newCollectibles]);
-  }, []);
-
-  if (!utils.isPlaying) return null;
+  }, [addCoins, addScore, healPlayer, addPowerUp]);
 
   return (
-    <group>
-      {collectibles.map(collectible => collectible.active && !collectible.collected && (
+    <group {...props}>
+      {collectibles.map((collectibleData) => (
         <Collectible
-          key={collectible.id}
-          collectibleId={collectible.id}
-          type={collectible.type}
-          position={collectible.position}
-          playerRef={playerRef}
-          config={collectible.config}
-          onCollect={() => collectItem(collectible.id)}
+          key={collectibleData.id}
+          data={collectibleData}
+          onCollect={(data) => handleCollect(collectibleData.id, data)}
         />
       ))}
     </group>
@@ -111,443 +82,672 @@ export function CollectibleManager({ collectibleSpawns = [], playerRef }) {
 }
 
 // ========================================
-// 💎 COMPONENTE COLECCIONABLE INDIVIDUAL
+// 🏆 COMPONENTE DE COLECCIONABLE INDIVIDUAL
 // ========================================
 
-export function Collectible({
-  collectibleId,
-  type = 'coin',
-  position = [0, 2, 0],
-  playerRef,
-  config = {},
-  onCollect
-}) {
-  const collectibleRef = useRef();
+function Collectible({ data, onCollect }) {
   const meshRef = useRef();
-  const magnetRef = useRef(false);
-  const [isCollecting, setIsCollecting] = useState(false);
-  const [scale, setScale] = useState(1);
+  const rigidBodyRef = useRef();
+  const groupRef = useRef();
+  const [isCollected, setIsCollected] = useState(false);
+  const [animationTime, setAnimationTime] = useState(Math.random() * Math.PI * 2);
+  const [magnetTarget, setMagnetTarget] = useState(null);
+  const [collectionAnimation, setCollectionAnimation] = useState(0);
 
-  const { actions } = useGame();
   const { playSound } = useAudioManager();
+  const { settings, player } = useGameContext();
 
-  // Configuración del coleccionable
-  const collectibleConfig = { ...gameConfig.collectibles[type], ...config };
+  // Collectible configuration
+  const config = useMemo(() => ({
+    type: data.type || 'coin',
+    position: data.position || { x: 0, y: 1, z: 0 },
+    value: data.value || 1,
+    size: data.size || 0.3,
+    color: data.color || getDefaultColor(data.type),
+    animation: data.animation || 'rotate',
+    magnetRange: data.magnetRange || 2,
+    floatHeight: data.floatHeight || 0.3,
+    ...data
+  }), [data]);
 
   // ========================================
-  // 💫 EFECTOS VISUALES
+  // 🔄 ANIMATION LOGIC
   // ========================================
 
-  useFrame((state, deltaTime) => {
-    if (!meshRef.current || !playerRef?.current) return;
+  useFrame((state, delta) => {
+    if (isCollected || !meshRef.current || !groupRef.current) return;
 
-    const collectiblePos = collectibleRef.current?.translation();
-    const playerPos = playerRef.current.translation();
+    setAnimationTime(prev => prev + delta);
 
-    if (!collectiblePos) return;
+    // Check for magnet effect
+    checkMagnetEffect();
 
-    // Calcular distancia al jugador
-    const distance = new THREE.Vector3(
-      playerPos.x - collectiblePos.x,
-      playerPos.y - collectiblePos.y,
-      playerPos.z - collectiblePos.z
-    ).length();
-
-    // Efectos de magnetismo
-    if (distance <= collectibleConfig.magnetRadius) {
-      magnetRef.current = true;
-
-      // Atraer hacia el jugador
-      const direction = new THREE.Vector3(
-        playerPos.x - collectiblePos.x,
-        playerPos.y - collectiblePos.y,
-        playerPos.z - collectiblePos.z
-      ).normalize();
-
-      const magnetForce = {
-        x: direction.x * 10 * deltaTime,
-        y: direction.y * 10 * deltaTime,
-        z: direction.z * 10 * deltaTime
-      };
-
-      collectibleRef.current?.applyImpulse(magnetForce, true);
+    // Apply animations
+    switch (config.animation) {
+      case 'rotate':
+        handleRotateAnimation();
+        break;
+      case 'float':
+        handleFloatAnimation();
+        break;
+      case 'pulse':
+        handlePulseAnimation();
+        break;
+      case 'spin':
+        handleSpinAnimation();
+        break;
+      default:
+        handleRotateAnimation();
     }
 
-    // Animaciones
-    if (!isCollecting) {
-      // Rotación
-      meshRef.current.rotation.y += collectibleConfig.rotationSpeed * deltaTime;
-
-      // Flotación
-      const bobOffset = Math.sin(state.clock.elapsedTime * 2 + collectibleId) * collectibleConfig.bobAmount;
-      meshRef.current.position.y = bobOffset;
-
-      // Pulsación cuando está cerca del jugador
-      if (distance <= collectibleConfig.collectRadius * 2) {
-        const pulse = 1 + Math.sin(state.clock.elapsedTime * 8) * 0.1;
-        setScale(pulse);
-      } else {
-        setScale(1);
-      }
+    // Handle magnet movement
+    if (magnetTarget) {
+      handleMagnetMovement(delta);
     }
 
-    // Efecto de recolección
-    if (isCollecting) {
-      const collectScale = Math.max(0, scale - deltaTime * 3);
-      setScale(collectScale);
-
-      if (collectScale <= 0.1 && onCollect) {
-        onCollect();
-      }
+    // Collection animation
+    if (collectionAnimation > 0) {
+      handleCollectionAnimation(delta);
     }
   });
 
-  // ========================================
-  // 🤲 LÓGICA DE RECOLECCIÓN
-  // ========================================
+  const checkMagnetEffect = useCallback(() => {
+    if (magnetTarget || !player.position) return;
 
-  const handleCollect = useCallback(() => {
-    if (isCollecting) return;
+    const distance = VectorUtils.distance(config.position, player.position);
+    if (distance <= config.magnetRange) {
+      setMagnetTarget(player.position);
+      playSound('magnet', { volume: settings.audio.sfxVolume * 0.3 });
+    }
+  }, [magnetTarget, player.position, config.position, config.magnetRange, playSound, settings]);
 
-    setIsCollecting(true);
+  const handleRotateAnimation = useCallback(() => {
+    if (!meshRef.current) return;
 
-    // Aplicar efectos según el tipo
-    switch (type) {
-      case 'coin':
-        actions.updateScore(collectibleConfig.points);
-        actions.addCollectible();
-        playSound('collect', { volume: 0.6, rate: 1.0 });
-        break;
+    meshRef.current.rotation.y = animationTime * 2;
 
-      case 'gem':
-        actions.updateScore(collectibleConfig.points);
-        actions.addCollectible();
-        playSound('collect', { volume: 0.8, rate: 1.2 });
-        break;
+    // Float up and down
+    const floatOffset = Math.sin(animationTime * 3) * config.floatHeight;
+    groupRef.current.position.y = config.position.y + floatOffset;
+  }, [animationTime, config.floatHeight, config.position.y]);
 
-      case 'powerup':
-        applyPowerup();
-        playSound('collect', { volume: 1.0, rate: 1.5 });
-        break;
+  const handleFloatAnimation = useCallback(() => {
+    if (!groupRef.current) return;
 
-      case 'health':
-        actions.updateHealth(25);
-        playSound('collect', { volume: 0.7, rate: 0.8 });
-        break;
+    const floatOffset = Math.sin(animationTime * 2) * config.floatHeight;
+    groupRef.current.position.y = config.position.y + floatOffset;
+  }, [animationTime, config.floatHeight, config.position.y]);
 
-      case 'life':
-        actions.updateLives(1);
-        playSound('collect', { volume: 1.0, rate: 2.0 });
-        break;
+  const handlePulseAnimation = useCallback(() => {
+    if (!meshRef.current) return;
+
+    const scale = 1 + Math.sin(animationTime * 4) * 0.2;
+    meshRef.current.scale.setScalar(scale);
+  }, [animationTime]);
+
+  const handleSpinAnimation = useCallback(() => {
+    if (!meshRef.current) return;
+
+    meshRef.current.rotation.x = animationTime * 3;
+    meshRef.current.rotation.y = animationTime * 2;
+    meshRef.current.rotation.z = animationTime * 1;
+  }, [animationTime]);
+
+  const handleMagnetMovement = useCallback((delta) => {
+    if (!rigidBodyRef.current || !magnetTarget) return;
+
+    const currentPos = rigidBodyRef.current.translation();
+    const direction = VectorUtils.subtract(magnetTarget, currentPos);
+    const distance = VectorUtils.magnitude(direction);
+
+    if (distance < 0.5) {
+      // Close enough to collect
+      triggerCollection();
+      return;
     }
 
-    // Crear partículas de recolección
-    createCollectionParticles();
-  }, [isCollecting, type, actions, playSound, collectibleConfig.points]);
+    // Move towards target
+    const normalizedDirection = VectorUtils.normalize(direction);
+    const speed = 8; // Magnet speed
+    const velocity = VectorUtils.multiply(normalizedDirection, speed);
 
-  const applyPowerup = useCallback(() => {
-    const powerupTypes = ['speed', 'jump', 'invincible', 'magnet'];
-    const randomPowerup = powerupTypes[Math.floor(Math.random() * powerupTypes.length)];
+    rigidBodyRef.current.setLinvel(velocity, true);
+  }, [magnetTarget]);
 
-    // Implementar diferentes power-ups
-    switch (randomPowerup) {
-      case 'speed':
-        // Speed boost temporal
-        console.log('Speed boost activated!');
-        break;
-      case 'jump':
-        // Jump boost temporal
-        console.log('Jump boost activated!');
-        break;
-      case 'invincible':
-        // Invencibilidad temporal
-        console.log('Invincible activated!');
-        break;
-      case 'magnet':
-        // Magnetismo mejorado
-        console.log('Magnet activated!');
-        break;
+  const handleCollectionAnimation = useCallback((delta) => {
+    if (!meshRef.current || !groupRef.current) return;
+
+    setCollectionAnimation(prev => prev + delta * 5);
+
+    // Scale up and fade out
+    const scale = 1 + collectionAnimation;
+    const opacity = Math.max(0, 1 - collectionAnimation);
+
+    meshRef.current.scale.setScalar(scale);
+    if (meshRef.current.material) {
+      meshRef.current.material.opacity = opacity;
     }
-  }, []);
 
-  const createCollectionParticles = useCallback(() => {
-    // Las partículas se crearán en un componente separado
-    console.log(`Collection particles for ${type}`);
-  }, [type]);
+    // Remove when animation completes
+    if (collectionAnimation >= 1) {
+      groupRef.current.visible = false;
+    }
+  }, [collectionAnimation]);
 
   // ========================================
-  // 💥 MANEJO DE COLISIONES
+  // 💥 COLLISION HANDLING
   // ========================================
 
-  const handleCollision = useCallback((event) => {
+  const handleCollisionEnter = useCallback((event) => {
     const { other } = event;
 
-    if (other.rigidBodyObject?.userData?.type === 'player') {
-      handleCollect();
+    if (other.rigidBodyObject?.userData?.type === 'player' && !isCollected) {
+      triggerCollection();
     }
-  }, [handleCollect]);
+  }, [isCollected]);
 
-  // ========================================
-  // 🎨 FUNCIONES DE RENDER
-  // ========================================
+  const triggerCollection = useCallback(() => {
+    if (isCollected) return;
 
-  const getCollectibleGeometry = () => {
-    switch (type) {
-      case 'coin':
-        return <cylinderGeometry args={[0.3, 0.3, 0.05, 16]} />;
-      case 'gem':
-        return <octahedronGeometry args={[0.3]} />;
-      case 'powerup':
-        return <icosahedronGeometry args={[0.25]} />;
-      case 'health':
-        return <sphereGeometry args={[0.2]} />;
-      case 'life':
-        return <dodecahedronGeometry args={[0.25]} />;
-      default:
-        return <sphereGeometry args={[0.2]} />;
-    }
-  };
+    setIsCollected(true);
+    setCollectionAnimation(0.01); // Start collection animation
 
-  const getCollectibleColor = () => {
-    switch (type) {
-      case 'coin': return '#ffdd00';
-      case 'gem': return '#00ffff';
-      case 'powerup': return '#ff00ff';
-      case 'health': return '#ff3333';
-      case 'life': return '#33ff33';
-      default: return '#ffffff';
-    }
-  };
-
-  const getEmissiveColor = () => {
-    switch (type) {
-      case 'coin': return '#ffaa00';
-      case 'gem': return '#0088aa';
-      case 'powerup': return '#aa00aa';
-      case 'health': return '#aa1111';
-      case 'life': return '#11aa11';
-      default: return '#000000';
-    }
-  };
-
-  // ========================================
-  // 🎨 RENDER DEL COLECCIONABLE
-  // ========================================
-
-  return (
-    <RigidBody
-      ref={collectibleRef}
-      position={position}
-      type="dynamic"
-      colliders={false}
-      gravityScale={0.1}
-      onCollisionEnter={handleCollision}
-      userData={{
-        type: 'collectible',
-        collectibleType: type,
-        points: collectibleConfig.points,
-        value: collectibleConfig.points
-      }}
-    >
-      {/* Collider del coleccionable */}
-      <CuboidCollider args={[0.3, 0.3, 0.3]} sensor />
-
-      {/* Mesh visual del coleccionable */}
-      <group ref={meshRef} scale={[scale, scale, scale]}>
-        <mesh castShadow>
-          {getCollectibleGeometry()}
-          <meshStandardMaterial
-            color={getCollectibleColor()}
-            emissive={getEmissiveColor()}
-            emissiveIntensity={magnetRef.current ? 0.3 : 0.1}
-            metalness={type === 'coin' ? 0.8 : 0.2}
-            roughness={type === 'coin' ? 0.2 : 0.8}
-            transparent={isCollecting}
-            opacity={isCollecting ? 0.5 : 1.0}
-          />
-        </mesh>
-
-        {/* Efectos especiales por tipo */}
-        {type === 'coin' && (
-          <mesh rotation={[Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[0.31, 0.35, 16]} />
-            <meshBasicMaterial
-              color="#ffdd00"
-              transparent
-              opacity={0.6}
-            />
-          </mesh>
-        )}
-
-        {type === 'gem' && (
-          <pointLight
-            color="#00ffff"
-            intensity={0.5}
-            distance={3}
-            position={[0, 0, 0]}
-          />
-        )}
-
-        {type === 'powerup' && (
-          <group>
-            {[...Array(6)].map((_, i) => {
-              const angle = (i / 6) * Math.PI * 2;
-              const x = Math.cos(angle) * 0.4;
-              const z = Math.sin(angle) * 0.4;
-
-              return (
-                <mesh key={i} position={[x, 0, z]}>
-                  <sphereGeometry args={[0.02]} />
-                  <meshBasicMaterial
-                    color="#ff00ff"
-                    transparent
-                    opacity={0.8}
-                  />
-                </mesh>
-              );
-            })}
-          </group>
-        )}
-
-        {type === 'health' && (
-          <group>
-            {/* Cruz roja */}
-            <mesh position={[0, 0, 0.21]}>
-              <boxGeometry args={[0.15, 0.05, 0.01]} />
-              <meshBasicMaterial color="#ffffff" />
-            </mesh>
-            <mesh position={[0, 0, 0.21]}>
-              <boxGeometry args={[0.05, 0.15, 0.01]} />
-              <meshBasicMaterial color="#ffffff" />
-            </mesh>
-          </group>
-        )}
-
-        {type === 'life' && (
-          <pointLight
-            color="#33ff33"
-            intensity={0.3}
-            distance={2}
-            position={[0, 0, 0]}
-          />
-        )}
-
-        {/* Aura de magnetismo */}
-        {magnetRef.current && (
-          <mesh>
-            <sphereGeometry args={[0.5]} />
-            <meshBasicMaterial
-              color={getCollectibleColor()}
-              transparent
-              opacity={0.1}
-              wireframe
-            />
-          </mesh>
-        )}
-
-        {/* Partículas flotantes */}
-        <FloatingParticles type={type} active={!isCollecting} />
-      </group>
-    </RigidBody>
-  );
-}
-
-// ========================================
-// ✨ COMPONENTE DE PARTÍCULAS FLOTANTES
-// ========================================
-
-function FloatingParticles({ type, active }) {
-  const particlesRef = useRef();
-  const particlesCount = type === 'powerup' ? 8 : 4;
-
-  useFrame((state, deltaTime) => {
-    if (!particlesRef.current || !active) return;
-
-    particlesRef.current.rotation.y += deltaTime * 0.5;
-
-    particlesRef.current.children.forEach((particle, i) => {
-      const offset = (i / particlesCount) * Math.PI * 2;
-      const radius = 0.6 + Math.sin(state.clock.elapsedTime * 2 + offset) * 0.1;
-      const height = Math.sin(state.clock.elapsedTime * 3 + offset) * 0.2;
-
-      particle.position.x = Math.cos(offset + state.clock.elapsedTime) * radius;
-      particle.position.y = height;
-      particle.position.z = Math.sin(offset + state.clock.elapsedTime) * radius;
+    // Play collection sound
+    const soundName = getCollectionSound(config.type);
+    playSound(soundName, {
+      volume: settings.audio.sfxVolume,
+      rate: MathUtils.randomFloat(0.9, 1.1) // Slight pitch variation
     });
-  });
 
-  if (!active) return null;
+    // Trigger collection effects
+    onCollect(config);
+
+    // Remove rigidbody collision
+    if (rigidBodyRef.current) {
+      rigidBodyRef.current.setEnabled(false);
+    }
+  }, [isCollected, config, playSound, settings, onCollect]);
+
+  // ========================================
+  // 🎨 RENDERING
+  // ========================================
+
+  const getGeometry = useCallback(() => {
+    switch (config.type) {
+      case 'coin':
+        return <cylinderGeometry args={[config.size, config.size, config.size * 0.2, 16]} />;
+      case 'gem':
+        return <octahedronGeometry args={[config.size, 1]} />;
+      case 'heart':
+        return <HeartGeometry size={config.size} />;
+      case 'star':
+        return <StarGeometry size={config.size} />;
+      case 'powerup':
+        return <boxGeometry args={[config.size, config.size, config.size]} />;
+      default:
+        return <sphereGeometry args={[config.size, 16, 16]} />;
+    }
+  }, [config.type, config.size]);
+
+  const getMaterial = useCallback(() => {
+    const baseProps = {
+      color: config.color,
+      metalness: 0.2,
+      roughness: 0.3,
+      transparent: true,
+      opacity: 1
+    };
+
+    switch (config.type) {
+      case 'coin':
+        return (
+          <meshStandardMaterial
+            {...baseProps}
+            metalness={0.8}
+            roughness={0.1}
+            emissive={new THREE.Color(config.color).multiplyScalar(0.1)}
+          />
+        );
+      case 'gem':
+        return (
+          <meshStandardMaterial
+            {...baseProps}
+            metalness={0.1}
+            roughness={0.0}
+            emissive={new THREE.Color(config.color).multiplyScalar(0.2)}
+          />
+        );
+      case 'heart':
+        return (
+          <meshStandardMaterial
+            {...baseProps}
+            emissive={new THREE.Color(config.color).multiplyScalar(0.3)}
+          />
+        );
+      case 'star':
+        return (
+          <meshBasicMaterial
+            color={config.color}
+            transparent
+            opacity={0.9}
+          />
+        );
+      case 'powerup':
+        return (
+          <meshStandardMaterial
+            {...baseProps}
+            emissive={new THREE.Color(config.color).multiplyScalar(0.4)}
+          />
+        );
+      default:
+        return (
+          <meshStandardMaterial {...baseProps} />
+        );
+    }
+  }, [config.type, config.color]);
+
+  if (isCollected && collectionAnimation >= 1) {
+    return null;
+  }
 
   return (
-    <group ref={particlesRef}>
-      {[...Array(particlesCount)].map((_, i) => (
-        <mesh key={i}>
-          <sphereGeometry args={[0.02]} />
-          <meshBasicMaterial
-            color={type === 'coin' ? '#ffdd00' :
-                  type === 'gem' ? '#00ffff' :
-                  type === 'powerup' ? '#ff00ff' : '#ffffff'}
-            transparent
-            opacity={0.8}
-          />
+    <group ref={groupRef} position={[config.position.x, config.position.y, config.position.z]}>
+      <RigidBody
+        ref={rigidBodyRef}
+        type="fixed"
+        colliders={false}
+        sensor
+        onCollisionEnter={handleCollisionEnter}
+        userData={{
+          type: 'collectible',
+          collectibleType: config.type,
+          id: config.id
+        }}
+      >
+        {config.type === 'coin' ? (
+          <CuboidCollider args={[config.size, config.size * 0.2, config.size]} sensor />
+        ) : (
+          <BallCollider args={[config.size]} sensor />
+        )}
+
+        <mesh ref={meshRef} castShadow>
+          {getGeometry()}
+          {getMaterial()}
         </mesh>
-      ))}
+
+        {/* Collection Effects */}
+        <CollectibleEffects
+          type={config.type}
+          size={config.size}
+          color={config.color}
+          isCollected={isCollected}
+        />
+      </RigidBody>
     </group>
   );
 }
 
 // ========================================
-// 🎁 COMPONENTES ESPECIALIZADOS
+// ❤️ GEOMETRÍA PERSONALIZADA - CORAZÓN
 // ========================================
 
-export function Coin({ position, onCollect }) {
+function HeartGeometry({ size }) {
+  const heartShape = useMemo(() => {
+    const shape = new THREE.Shape();
+    const x = 0, y = 0;
+
+    shape.moveTo(x + 5, y + 5);
+    shape.bezierCurveTo(x + 5, y + 5, x + 4, y, x, y);
+    shape.bezierCurveTo(x - 6, y, x - 6, y + 3.5, x - 6, y + 3.5);
+    shape.bezierCurveTo(x - 6, y + 5.5, x - 4, y + 7.5, x, y + 10);
+    shape.bezierCurveTo(x + 4, y + 7.5, x + 6, y + 5.5, x + 6, y + 3.5);
+    shape.bezierCurveTo(x + 6, y + 3.5, x + 6, y, x, y);
+    shape.bezierCurveTo(x + 4, y, x + 5, y + 5, x + 5, y + 5);
+
+    return shape;
+  }, []);
+
   return (
-    <Collectible
-      type="coin"
-      position={position}
-      onCollect={onCollect}
+    <extrudeGeometry
+      args={[
+        heartShape,
+        {
+          depth: size * 0.3,
+          bevelEnabled: true,
+          bevelSegments: 2,
+          steps: 2,
+          bevelSize: size * 0.05,
+          bevelThickness: size * 0.05
+        }
+      ]}
+      scale={[size * 0.05, size * 0.05, 1]}
     />
   );
 }
 
-export function Gem({ position, onCollect }) {
+// ========================================
+// ⭐ GEOMETRÍA PERSONALIZADA - ESTRELLA
+// ========================================
+
+function StarGeometry({ size }) {
+  const starShape = useMemo(() => {
+    const shape = new THREE.Shape();
+    const outerRadius = 1;
+    const innerRadius = 0.4;
+    const spikes = 5;
+
+    for (let i = 0; i < spikes * 2; i++) {
+      const angle = (i / (spikes * 2)) * Math.PI * 2;
+      const radius = i % 2 === 0 ? outerRadius : innerRadius;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
+
+      if (i === 0) {
+        shape.moveTo(x, y);
+      } else {
+        shape.lineTo(x, y);
+      }
+    }
+
+    shape.closePath();
+    return shape;
+  }, []);
+
   return (
-    <Collectible
-      type="gem"
-      position={position}
-      onCollect={onCollect}
+    <extrudeGeometry
+      args={[
+        starShape,
+        {
+          depth: size * 0.2,
+          bevelEnabled: true,
+          bevelSegments: 1,
+          steps: 1,
+          bevelSize: size * 0.02,
+          bevelThickness: size * 0.02
+        }
+      ]}
+      scale={[size, size, 1]}
     />
   );
 }
 
-export function PowerUp({ position, onCollect }) {
+// ========================================
+// ✨ EFECTOS DE COLECCIONABLES
+// ========================================
+
+function CollectibleEffects({ type, size, color, isCollected }) {
+  const effectRef = useRef();
+
+  useFrame((state) => {
+    if (!effectRef.current || isCollected) return;
+
+    const time = state.clock.elapsedTime;
+
+    switch (type) {
+      case 'coin':
+        // Coin sparkle effect
+        effectRef.current.rotation.z = time * 2;
+        break;
+      case 'gem':
+        // Gem crystal effect
+        effectRef.current.rotation.y = time * 3;
+        effectRef.current.scale.setScalar(1 + Math.sin(time * 5) * 0.1);
+        break;
+      case 'heart':
+        // Heart pulse effect
+        effectRef.current.scale.setScalar(1 + Math.sin(time * 4) * 0.2);
+        break;
+      case 'star':
+        // Star twinkle effect
+        effectRef.current.rotation.z = time;
+        break;
+      case 'powerup':
+        // Power-up energy effect
+        effectRef.current.rotation.x = time * 2;
+        effectRef.current.rotation.y = time * 1.5;
+        break;
+    }
+  });
+
   return (
-    <Collectible
-      type="powerup"
-      position={position}
-      onCollect={onCollect}
-    />
+    <group ref={effectRef}>
+      {type === 'coin' && <CoinSparkleEffect size={size} color={color} />}
+      {type === 'gem' && <GemCrystalEffect size={size} color={color} />}
+      {type === 'heart' && <HeartPulseEffect size={size} color={color} />}
+      {type === 'star' && <StarTwinkleEffect size={size} color={color} />}
+      {type === 'powerup' && <PowerUpEnergyEffect size={size} color={color} />}
+    </group>
   );
 }
 
-export function HealthPack({ position, onCollect }) {
+// ========================================
+// 💫 EFECTOS ESPECÍFICOS
+// ========================================
+
+function CoinSparkleEffect({ size, color }) {
+  const particlesRef = useRef();
+  const particleCount = 8;
+  const positions = useMemo(() => {
+    const array = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount; i++) {
+      const angle = (i / particleCount) * Math.PI * 2;
+      const radius = size * 1.5;
+      array[i * 3] = Math.cos(angle) * radius;
+      array[i * 3 + 1] = MathUtils.randomFloat(-size * 0.5, size * 0.5);
+      array[i * 3 + 2] = Math.sin(angle) * radius;
+    }
+    return array;
+  }, [size]);
+
   return (
-    <Collectible
-      type="health"
-      position={position}
-      onCollect={onCollect}
-    />
+    <points ref={particlesRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          array={positions}
+          count={particleCount}
+          itemSize={3}
+        />
+      </bufferGeometry>
+      <pointsMaterial
+        size={0.05}
+        color={color}
+        transparent
+        opacity={0.6}
+      />
+    </points>
   );
 }
 
-export function ExtraLife({ position, onCollect }) {
+function GemCrystalEffect({ size, color }) {
   return (
-    <Collectible
-      type="life"
-      position={position}
-      onCollect={onCollect}
-    />
+    <mesh>
+      <octahedronGeometry args={[size * 1.2, 0]} />
+      <meshBasicMaterial
+        color={color}
+        transparent
+        opacity={0.3}
+        wireframe
+      />
+    </mesh>
   );
 }
 
-export default CollectibleManager;
+function HeartPulseEffect({ size, color }) {
+  return (
+    <mesh>
+      <sphereGeometry args={[size * 1.5, 8, 8]} />
+      <meshBasicMaterial
+        color={color}
+        transparent
+        opacity={0.2}
+      />
+    </mesh>
+  );
+}
+
+function StarTwinkleEffect({ size, color }) {
+  const linesRef = useRef();
+
+  const positions = useMemo(() => {
+    const array = new Float32Array(6 * 3 * 2); // 3 lines, 2 points each
+    const length = size * 2;
+
+    // Horizontal line
+    array[0] = -length; array[1] = 0; array[2] = 0;
+    array[3] = length; array[4] = 0; array[5] = 0;
+
+    // Vertical line
+    array[6] = 0; array[7] = -length; array[8] = 0;
+    array[9] = 0; array[10] = length; array[11] = 0;
+
+    // Diagonal line
+    array[12] = -length * 0.7; array[13] = -length * 0.7; array[14] = 0;
+    array[15] = length * 0.7; array[16] = length * 0.7; array[17] = 0;
+
+    return array;
+  }, [size]);
+
+  return (
+    <lineSegments ref={linesRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          array={positions}
+          count={6}
+          itemSize={3}
+        />
+      </bufferGeometry>
+      <lineBasicMaterial
+        color={color}
+        transparent
+        opacity={0.8}
+      />
+    </lineSegments>
+  );
+}
+
+function PowerUpEnergyEffect({ size, color }) {
+  return (
+    <group>
+      <mesh>
+        <torusGeometry args={[size * 1.2, size * 0.1, 6, 12]} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={0.6}
+        />
+      </mesh>
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[size * 1.2, size * 0.1, 6, 12]} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={0.6}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+// ========================================
+// 🛠️ UTILITY FUNCTIONS
+// ========================================
+
+function getDefaultColor(type) {
+  const colors = gameConfig.collectibles.types;
+  return colors[type]?.color || 0xffff00;
+}
+
+function getCollectionSound(type) {
+  switch (type) {
+    case 'coin':
+      return 'collect';
+    case 'gem':
+      return 'gem_collect';
+    case 'heart':
+      return 'heal';
+    case 'star':
+      return 'star_collect';
+    case 'powerup':
+      return 'powerup';
+    default:
+      return 'collect';
+  }
+}
+
+function generateProceduralCollectibles(level) {
+  const collectibles = [];
+  const collectibleCount = Math.min(20 + level * 5, 50);
+
+  for (let i = 0; i < collectibleCount; i++) {
+    const distance = MathUtils.randomFloat(5, 30);
+    const angle = Math.random() * Math.PI * 2;
+    const height = MathUtils.randomFloat(1, 8);
+
+    const x = Math.cos(angle) * distance;
+    const z = Math.sin(angle) * distance;
+
+    const type = getRandomCollectibleType(level);
+    const config = gameConfig.collectibles.types[type] || {};
+
+    collectibles.push({
+      id: `collectible-${i}`,
+      type,
+      position: { x, y: height, z },
+      value: config.value || 1,
+      size: config.size || 0.3,
+      color: config.color || 0xffff00,
+      scoreValue: getScoreValue(type),
+      ...getTypeSpecificConfig(type)
+    });
+  }
+
+  return collectibles;
+}
+
+function getRandomCollectibleType(level) {
+  const rand = Math.random();
+
+  // Higher level = more valuable items
+  if (level > 3 && rand < 0.05) return 'powerup';
+  if (level > 2 && rand < 0.1) return 'star';
+  if (rand < 0.15) return 'gem';
+  if (rand < 0.25) return 'heart';
+
+  return 'coin'; // Most common
+}
+
+function getScoreValue(type) {
+  switch (type) {
+    case 'coin': return 10;
+    case 'gem': return 50;
+    case 'heart': return 25;
+    case 'star': return 100;
+    case 'powerup': return 75;
+    default: return 10;
+  }
+}
+
+function getTypeSpecificConfig(type) {
+  switch (type) {
+    case 'heart':
+      return { healAmount: 25 };
+    case 'powerup':
+      return {
+        powerUp: {
+          id: Date.now(),
+          type: 'speedBoost',
+          name: 'Speed Boost',
+          duration: 10000,
+          effect: { walkSpeed: 1.5, runSpeed: 1.5 },
+          color: 0x00ff00,
+          icon: '⚡'
+        }
+      };
+    default:
+      return {};
+  }
+}
+
+export default Collectibles;

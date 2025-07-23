@@ -1,541 +1,667 @@
 /* ============================================================================ */
 /* 🎮 CRASH WORM 3D - SISTEMA DE EFECTOS DE PARTÍCULAS */
 /* ============================================================================ */
+/* Ubicación: src/components/ParticleEffects.jsx */
 
-import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useGame } from '@/context/GameContext';
-import { gameConfig } from '@/data/gameConfig';
-import { MathUtils } from '@/utils/gameUtils';
+import { useGameContext } from '../context/GameContext';
+import { gameConfig } from '../data/gameConfig';
+import { MathUtils, VectorUtils, PerformanceUtils } from '../utils/gameUtils';
 
 // ========================================
-// ✨ MANAGER DE EFECTOS DE PARTÍCULAS
+// ✨ COMPONENTE PRINCIPAL DE EFECTOS DE PARTÍCULAS
 // ========================================
 
-export function ParticleEffectsManager() {
-  const { state, utils } = useGame();
+export function ParticleEffects({ effects = [], globalEffects = true, ...props }) {
+  const { settings, performance } = useGameContext();
   const [activeEffects, setActiveEffects] = useState([]);
-  const effectIdCounter = useRef(0);
+  const [globalParticles, setGlobalParticles] = useState([]);
 
-  const createEffect = useCallback((type, options = {}) => {
-    const newEffect = {
-      id: effectIdCounter.current++,
-      type,
-      ...options,
-      createdAt: Date.now(),
-      active: true
-    };
+  // Effect management
+  useEffect(() => {
+    setActiveEffects(effects);
+  }, [effects]);
 
-    setActiveEffects(prev => [...prev, newEffect]);
-
-    return newEffect.id;
-  }, []);
+  // Global environmental effects
+  useEffect(() => {
+    if (globalEffects) {
+      const environmentalEffects = generateEnvironmentalEffects();
+      setGlobalParticles(environmentalEffects);
+    }
+  }, [globalEffects]);
 
   const removeEffect = useCallback((effectId) => {
     setActiveEffects(prev => prev.filter(effect => effect.id !== effectId));
   }, []);
 
-  // API para crear efectos comunes
-  const effects = useMemo(() => ({
-    explosion: (position, options = {}) => createEffect('explosion', { position, ...options }),
-    trail: (position, options = {}) => createEffect('trail', { position, ...options }),
-    collect: (position, options = {}) => createEffect('collect', { position, ...options }),
-    jump: (position, options = {}) => createEffect('jump', { position, ...options }),
-    damage: (position, options = {}) => createEffect('damage', { position, ...options }),
-    heal: (position, options = {}) => createEffect('heal', { position, ...options }),
-    powerup: (position, options = {}) => createEffect('powerup', { position, ...options }),
-    environment: (position, options = {}) => createEffect('environment', { position, ...options })
-  }), [createEffect]);
-
-  // Exponer API globalmente
-  useEffect(() => {
-    window.gameEffects = effects;
-    return () => {
-      delete window.gameEffects;
+  const addEffect = useCallback((effectData) => {
+    const newEffect = {
+      id: Date.now() + Math.random(),
+      ...effectData,
+      startTime: Date.now()
     };
-  }, [effects]);
+    setActiveEffects(prev => [...prev, newEffect]);
+  }, []);
 
   return (
-    <group>
-      {activeEffects.map(effect => (
+    <group {...props}>
+      {/* Active Effects */}
+      {activeEffects.map((effect) => (
         <ParticleEffect
           key={effect.id}
-          {...effect}
+          data={effect}
           onComplete={() => removeEffect(effect.id)}
+        />
+      ))}
+
+      {/* Global Environmental Effects */}
+      {globalEffects && (
+        <EnvironmentalEffects particles={globalParticles} />
+      )}
+    </group>
+  );
+}
+
+// ========================================
+// 🎆 COMPONENTE DE EFECTO DE PARTÍCULAS INDIVIDUAL
+// ========================================
+
+function ParticleEffect({ data, onComplete }) {
+  const particlesRef = useRef();
+  const materialRef = useRef();
+  const [isActive, setIsActive] = useState(true);
+  const [elapsedTime, setElapsedTime] = useState(0);
+
+  // Effect configuration
+  const config = useMemo(() => ({
+    type: data.type || 'explosion',
+    position: data.position || { x: 0, y: 0, z: 0 },
+    count: data.count || 50,
+    duration: data.duration || 2000, // milliseconds
+    spread: data.spread || 2,
+    speed: data.speed || 5,
+    gravity: data.gravity || -9.8,
+    color: data.color || 0xffffff,
+    size: data.size || 0.1,
+    opacity: data.opacity || 1,
+    fadeOut: data.fadeOut !== false,
+    texture: data.texture || null,
+    blending: data.blending || THREE.NormalBlending,
+    ...data
+  }), [data]);
+
+  // Particle data arrays
+  const particleData = useMemo(() => {
+    return initializeParticles(config);
+  }, [config]);
+
+  // ========================================
+  // 🔄 PARTICLE UPDATE LOOP
+  // ========================================
+
+  useFrame((state, delta) => {
+    if (!isActive || !particlesRef.current) return;
+
+    setElapsedTime(prev => prev + delta * 1000);
+
+    // Check if effect should end
+    if (elapsedTime >= config.duration) {
+      setIsActive(false);
+      onComplete?.();
+      return;
+    }
+
+    // Update particles based on type
+    updateParticles(delta, elapsedTime);
+  });
+
+  const updateParticles = useCallback((delta, time) => {
+    const { positions, velocities, lifetimes, sizes, opacities } = particleData;
+    const timeSeconds = time / 1000;
+    const durationSeconds = config.duration / 1000;
+
+    for (let i = 0; i < config.count; i++) {
+      const i3 = i * 3;
+
+      // Update lifetime
+      lifetimes[i] -= delta;
+
+      if (lifetimes[i] <= 0) {
+        // Reset particle or mark as dead
+        if (config.loop) {
+          resetParticle(i, particleData, config);
+        } else {
+          // Hide particle
+          positions[i3 + 1] = -1000;
+          continue;
+        }
+      }
+
+      // Apply velocity
+      positions[i3] += velocities[i3] * delta;
+      positions[i3 + 1] += velocities[i3 + 1] * delta;
+      positions[i3 + 2] += velocities[i3 + 2] * delta;
+
+      // Apply gravity
+      velocities[i3 + 1] += config.gravity * delta;
+
+      // Update size and opacity based on type
+      updateParticleVisuals(i, timeSeconds, durationSeconds, particleData, config);
+    }
+
+    // Mark geometry for update
+    if (particlesRef.current) {
+      particlesRef.current.geometry.attributes.position.needsUpdate = true;
+      if (particlesRef.current.geometry.attributes.size) {
+        particlesRef.current.geometry.attributes.size.needsUpdate = true;
+      }
+      if (particlesRef.current.geometry.attributes.opacity) {
+        particlesRef.current.geometry.attributes.opacity.needsUpdate = true;
+      }
+    }
+  }, [particleData, config]);
+
+  const updateParticleVisuals = useCallback((index, time, duration, data, cfg) => {
+    const { sizes, opacities, lifetimes } = data;
+    const lifeProgress = 1 - (lifetimes[index] / (cfg.duration / 1000));
+
+    switch (cfg.type) {
+      case 'explosion':
+        // Explosion: start small, grow, then shrink
+        sizes[index] = cfg.size * (Math.sin(lifeProgress * Math.PI) * 2);
+        opacities[index] = cfg.opacity * (1 - lifeProgress);
+        break;
+
+      case 'fire':
+        // Fire: grow and fade
+        sizes[index] = cfg.size * (1 + lifeProgress * 0.5);
+        opacities[index] = cfg.opacity * (1 - lifeProgress * 0.8);
+        break;
+
+      case 'smoke':
+        // Smoke: grow and fade slowly
+        sizes[index] = cfg.size * (1 + lifeProgress * 2);
+        opacities[index] = cfg.opacity * (1 - lifeProgress * 0.6);
+        break;
+
+      case 'sparkle':
+        // Sparkle: twinkle effect
+        sizes[index] = cfg.size * (1 + Math.sin(time * 10 + index) * 0.3);
+        opacities[index] = cfg.opacity * (0.5 + Math.sin(time * 8 + index) * 0.5);
+        break;
+
+      case 'energy':
+        // Energy: pulse effect
+        sizes[index] = cfg.size * (1 + Math.sin(time * 6 + index) * 0.4);
+        opacities[index] = cfg.opacity * (0.7 + Math.sin(time * 4 + index) * 0.3);
+        break;
+
+      default:
+        // Default: simple fade
+        sizes[index] = cfg.size;
+        opacities[index] = cfg.opacity * (1 - lifeProgress);
+    }
+  }, []);
+
+  // ========================================
+  // 🎨 RENDERING
+  // ========================================
+
+  if (!isActive) return null;
+
+  return (
+    <points
+      ref={particlesRef}
+      position={[config.position.x, config.position.y, config.position.z]}
+    >
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          array={particleData.positions}
+          count={config.count}
+          itemSize={3}
+        />
+        <bufferAttribute
+          attach="attributes-size"
+          array={particleData.sizes}
+          count={config.count}
+          itemSize={1}
+        />
+        <bufferAttribute
+          attach="attributes-opacity"
+          array={particleData.opacities}
+          count={config.count}
+          itemSize={1}
+        />
+      </bufferGeometry>
+
+      <ParticleMaterial
+        ref={materialRef}
+        config={config}
+        particleData={particleData}
+      />
+    </points>
+  );
+}
+
+// ========================================
+// 🎨 MATERIAL DE PARTÍCULAS
+// ========================================
+
+const ParticleMaterial = React.forwardRef(({ config, particleData }, ref) => {
+  const materialRef = useRef();
+
+  useEffect(() => {
+    if (materialRef.current) {
+      materialRef.current.needsUpdate = true;
+    }
+  }, [config]);
+
+  const vertexShader = `
+    attribute float size;
+    attribute float opacity;
+    varying float vOpacity;
+
+    void main() {
+      vOpacity = opacity;
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = size * (300.0 / -mvPosition.z);
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  `;
+
+  const fragmentShader = `
+    uniform vec3 color;
+    uniform sampler2D pointTexture;
+    varying float vOpacity;
+
+    void main() {
+      gl_FragColor = vec4(color, vOpacity);
+
+      if (textureSize(pointTexture, 0).x > 0) {
+        gl_FragColor = gl_FragColor * texture2D(pointTexture, gl_PointCoord);
+      } else {
+        // Default circular particle
+        float dist = distance(gl_PointCoord, vec2(0.5, 0.5));
+        if (dist > 0.5) discard;
+        gl_FragColor.a *= (1.0 - dist * 2.0);
+      }
+    }
+  `;
+
+  return (
+    <shaderMaterial
+      ref={materialRef}
+      vertexShader={vertexShader}
+      fragmentShader={fragmentShader}
+      uniforms={{
+        color: { value: new THREE.Color(config.color) },
+        pointTexture: { value: config.texture }
+      }}
+      transparent
+      blending={config.blending}
+      depthWrite={false}
+    />
+  );
+});
+
+// ========================================
+// 🌍 EFECTOS AMBIENTALES
+// ========================================
+
+function EnvironmentalEffects({ particles }) {
+  return (
+    <group>
+      {particles.map((particle, index) => (
+        <EnvironmentalParticle
+          key={`env-${index}`}
+          data={particle}
         />
       ))}
     </group>
   );
 }
 
-// ========================================
-// 🌟 COMPONENTE BASE DE EFECTO DE PARTÍCULAS
-// ========================================
+function EnvironmentalParticle({ data }) {
+  const particleRef = useRef();
+  const [position, setPosition] = useState(data.position);
 
-function ParticleEffect({ id, type, position = [0, 0, 0], onComplete, ...options }) {
-  const groupRef = useRef();
-  const particlesRef = useRef();
-  const [isComplete, setIsComplete] = useState(false);
+  useFrame((state, delta) => {
+    if (!particleRef.current) return;
 
-  const effectConfig = getEffectConfig(type, options);
-  const particles = useRef(createParticles(effectConfig));
-
-  // ========================================
-  // 🎯 CONFIGURACIONES DE EFECTOS
-  // ========================================
-
-  function getEffectConfig(effectType, opts) {
-    const baseConfigs = {
-      explosion: {
-        particleCount: 30,
-        duration: 2.0,
-        spread: 5,
-        speed: { min: 2, max: 8 },
-        size: { min: 0.05, max: 0.2 },
-        colors: ['#ff4444', '#ff8844', '#ffcc44'],
-        gravity: -9.81,
-        friction: 0.98,
-        fadeOut: true,
-        ...opts
-      },
-      trail: {
-        particleCount: 15,
-        duration: 1.0,
-        spread: 1,
-        speed: { min: 0.5, max: 2 },
-        size: { min: 0.02, max: 0.08 },
-        colors: ['#4488ff', '#88ccff'],
-        gravity: 0,
-        friction: 0.95,
-        fadeOut: true,
-        ...opts
-      },
-      collect: {
-        particleCount: 20,
-        duration: 1.5,
-        spread: 2,
-        speed: { min: 1, max: 4 },
-        size: { min: 0.03, max: 0.1 },
-        colors: ['#ffff44', '#ffcc44', '#ff8844'],
-        gravity: -2,
-        friction: 0.96,
-        fadeOut: true,
-        ...opts
-      },
-      jump: {
-        particleCount: 12,
-        duration: 0.8,
-        spread: 1.5,
-        speed: { min: 1, max: 3 },
-        size: { min: 0.02, max: 0.06 },
-        colors: ['#ffffff', '#cccccc'],
-        gravity: -5,
-        friction: 0.94,
-        fadeOut: true,
-        ...opts
-      },
-      damage: {
-        particleCount: 25,
-        duration: 1.2,
-        spread: 3,
-        speed: { min: 2, max: 6 },
-        size: { min: 0.04, max: 0.12 },
-        colors: ['#ff0000', '#ff4444', '#ff8888'],
-        gravity: -3,
-        friction: 0.97,
-        fadeOut: true,
-        ...opts
-      },
-      heal: {
-        particleCount: 18,
-        duration: 2.0,
-        spread: 2,
-        speed: { min: 0.5, max: 2 },
-        size: { min: 0.03, max: 0.09 },
-        colors: ['#44ff44', '#88ff88', '#ccffcc'],
-        gravity: 2, // Hacia arriba
-        friction: 0.96,
-        fadeOut: true,
-        ...opts
-      },
-      powerup: {
-        particleCount: 35,
-        duration: 3.0,
-        spread: 4,
-        speed: { min: 1, max: 5 },
-        size: { min: 0.05, max: 0.15 },
-        colors: ['#ff00ff', '#ff44ff', '#ff88ff'],
-        gravity: 0,
-        friction: 0.98,
-        fadeOut: true,
-        spiral: true,
-        ...opts
-      },
-      environment: {
-        particleCount: 10,
-        duration: 5.0,
-        spread: 2,
-        speed: { min: 0.2, max: 1 },
-        size: { min: 0.01, max: 0.05 },
-        colors: ['#888888', '#aaaaaa', '#cccccc'],
-        gravity: -1,
-        friction: 0.99,
-        fadeOut: true,
-        continuous: true,
-        ...opts
-      }
-    };
-
-    return baseConfigs[effectType] || baseConfigs.explosion;
-  }
-
-  function createParticles(config) {
-    const particleArray = [];
-
-    for (let i = 0; i < config.particleCount; i++) {
-      const particle = {
-        id: i,
-        position: {
-          x: position[0] + (Math.random() - 0.5) * config.spread * 0.1,
-          y: position[1] + (Math.random() - 0.5) * config.spread * 0.1,
-          z: position[2] + (Math.random() - 0.5) * config.spread * 0.1
-        },
-        velocity: {
-          x: (Math.random() - 0.5) * config.spread,
-          y: Math.random() * config.speed.max,
-          z: (Math.random() - 0.5) * config.spread
-        },
-        size: MathUtils.random(config.size.min, config.size.max),
-        life: 1.0,
-        maxLife: MathUtils.random(config.duration * 0.5, config.duration),
-        color: config.colors[Math.floor(Math.random() * config.colors.length)],
-        opacity: 1.0,
-        rotation: Math.random() * Math.PI * 2,
-        rotationSpeed: (Math.random() - 0.5) * 4,
-        // Propiedades especiales
-        spiralAngle: config.spiral ? i * (Math.PI * 2 / config.particleCount) : 0,
-        spiralRadius: config.spiral ? MathUtils.random(1, 3) : 0
-      };
-
-      // Ajustar velocidad inicial
-      const speed = MathUtils.random(config.speed.min, config.speed.max);
-      const angle = Math.random() * Math.PI * 2;
-      const elevation = (Math.random() - 0.5) * Math.PI;
-
-      particle.velocity.x = Math.cos(angle) * Math.cos(elevation) * speed;
-      particle.velocity.y = Math.sin(elevation) * speed;
-      particle.velocity.z = Math.sin(angle) * Math.cos(elevation) * speed;
-
-      particleArray.push(particle);
-    }
-
-    return particleArray;
-  }
-
-  // ========================================
-  // 🔄 ACTUALIZACIÓN DE PARTÍCULAS
-  // ========================================
-
-  const updateParticles = useCallback((deltaTime) => {
-    const config = effectConfig;
-    let allParticlesDead = true;
-
-    particles.current.forEach(particle => {
-      if (particle.life <= 0) {
-        if (config.continuous) {
-          // Reiniciar partícula para efectos continuos
-          resetParticle(particle, config);
-        } else {
-          return;
-        }
-      }
-
-      allParticlesDead = false;
-
-      // Actualizar física
-      particle.velocity.y += config.gravity * deltaTime;
-
-      // Aplicar fricción
-      particle.velocity.x *= config.friction;
-      particle.velocity.y *= config.friction;
-      particle.velocity.z *= config.friction;
-
-      // Efectos especiales
-      if (config.spiral) {
-        particle.spiralAngle += deltaTime * 2;
-        particle.position.x += Math.cos(particle.spiralAngle) * particle.spiralRadius * deltaTime;
-        particle.position.z += Math.sin(particle.spiralAngle) * particle.spiralRadius * deltaTime;
-      }
-
-      // Actualizar posición
-      particle.position.x += particle.velocity.x * deltaTime;
-      particle.position.y += particle.velocity.y * deltaTime;
-      particle.position.z += particle.velocity.z * deltaTime;
-
-      // Actualizar rotación
-      particle.rotation += particle.rotationSpeed * deltaTime;
-
-      // Actualizar vida
-      particle.life -= deltaTime / particle.maxLife;
-
-      // Actualizar opacidad
-      if (config.fadeOut) {
-        particle.opacity = MathUtils.clamp(particle.life, 0, 1);
-      }
-
-      // Actualizar tamaño (puede decrecer con el tiempo)
-      if (config.shrink) {
-        particle.currentSize = particle.size * particle.life;
-      } else {
-        particle.currentSize = particle.size;
-      }
-    });
-
-    // Verificar si el efecto debe terminar
-    if (allParticlesDead && !config.continuous) {
-      setIsComplete(true);
-      if (onComplete) {
-        onComplete();
-      }
-    }
-  }, [effectConfig, onComplete]);
-
-  const resetParticle = useCallback((particle, config) => {
-    // Reiniciar partícula para efectos continuos
-    particle.position = {
-      x: position[0] + (Math.random() - 0.5) * config.spread * 0.1,
-      y: position[1] + (Math.random() - 0.5) * config.spread * 0.1,
-      z: position[2] + (Math.random() - 0.5) * config.spread * 0.1
-    };
-
-    const speed = MathUtils.random(config.speed.min, config.speed.max);
-    const angle = Math.random() * Math.PI * 2;
-    const elevation = (Math.random() - 0.5) * Math.PI;
-
-    particle.velocity = {
-      x: Math.cos(angle) * Math.cos(elevation) * speed,
-      y: Math.sin(elevation) * speed,
-      z: Math.sin(angle) * Math.cos(elevation) * speed
-    };
-
-    particle.life = 1.0;
-    particle.opacity = 1.0;
-    particle.rotation = Math.random() * Math.PI * 2;
-  }, [position]);
-
-  // ========================================
-  // 🎨 RENDERIZADO OPTIMIZADO
-  // ========================================
-
-  const particleGeometry = useMemo(() => new THREE.BufferGeometry(), []);
-  const particleMaterial = useMemo(() => new THREE.PointsMaterial({
-    size: 0.1,
-    transparent: true,
-    alphaTest: 0.1,
-    vertexColors: true
-  }), []);
-
-  const updateGeometry = useCallback(() => {
-    const positions = [];
-    const colors = [];
-    const sizes = [];
-
-    particles.current.forEach(particle => {
-      if (particle.life > 0) {
-        positions.push(particle.position.x, particle.position.y, particle.position.z);
-
-        // Convertir color hex a RGB
-        const color = new THREE.Color(particle.color);
-        colors.push(color.r, color.g, color.b);
-
-        sizes.push(particle.currentSize || particle.size);
-      }
-    });
-
-    particleGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    particleGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    particleGeometry.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
-  }, [particleGeometry]);
-
-  // ========================================
-  // 🔄 GAME LOOP
-  // ========================================
-
-  useFrame((_, deltaTime) => {
-    if (isComplete) return;
-
-    updateParticles(deltaTime);
-    updateGeometry();
-  });
-
-  // ========================================
-  // 🎨 RENDER
-  // ========================================
-
-  if (isComplete) return null;
-
-  return (
-    <group ref={groupRef} position={position}>
-      {/* Renderizado con instancias para mejor rendimiento */}
-      <points geometry={particleGeometry} material={particleMaterial} />
-
-      {/* Renderizado alternativo con meshes individuales para efectos especiales */}
-      {effectConfig.useIndividualMeshes && particles.current.map(particle => (
-        particle.life > 0 && (
-          <mesh
-            key={particle.id}
-            position={[particle.position.x, particle.position.y, particle.position.z]}
-            rotation={[0, 0, particle.rotation]}
-            scale={[particle.currentSize, particle.currentSize, particle.currentSize]}
-          >
-            <sphereGeometry args={[1, 8, 8]} />
-            <meshBasicMaterial
-              color={particle.color}
-              transparent
-              opacity={particle.opacity}
-            />
-          </mesh>
-        )
-      ))}
-
-      {/* Efectos adicionales específicos del tipo */}
-      {type === 'powerup' && <PowerupEffect />}
-      {type === 'explosion' && <ExplosionEffect />}
-      {type === 'heal' && <HealEffect />}
-    </group>
-  );
-}
-
-// ========================================
-// 🌟 EFECTOS ESPECIALES ADICIONALES
-// ========================================
-
-function PowerupEffect() {
-  const ringRef = useRef();
-
-  useFrame((state) => {
-    if (ringRef.current) {
-      ringRef.current.rotation.z = state.clock.elapsedTime * 2;
-      ringRef.current.scale.setScalar(1 + Math.sin(state.clock.elapsedTime * 4) * 0.2);
+    // Update particle based on type
+    switch (data.type) {
+      case 'dust':
+        updateDustParticle(delta);
+        break;
+      case 'ambient':
+        updateAmbientParticle(delta);
+        break;
+      default:
+        break;
     }
   });
 
+  const updateDustParticle = useCallback((delta) => {
+    setPosition(prev => ({
+      x: prev.x + Math.sin(Date.now() * 0.001 + data.offset) * 0.5 * delta,
+      y: prev.y + data.velocity.y * delta,
+      z: prev.z + Math.cos(Date.now() * 0.001 + data.offset) * 0.3 * delta
+    }));
+
+    // Reset if too far
+    if (position.y > 20) {
+      setPosition({ ...data.position, y: -5 });
+    }
+  }, [data, position.y]);
+
+  const updateAmbientParticle = useCallback((delta) => {
+    setPosition(prev => ({
+      x: prev.x + data.velocity.x * delta,
+      y: prev.y + data.velocity.y * delta,
+      z: prev.z + data.velocity.z * delta
+    }));
+
+    // Boundary checking and reset
+    const bounds = 50;
+    if (Math.abs(position.x) > bounds || Math.abs(position.z) > bounds || position.y < -5) {
+      setPosition({
+        x: MathUtils.randomFloat(-bounds, bounds),
+        y: 20,
+        z: MathUtils.randomFloat(-bounds, bounds)
+      });
+    }
+  }, [data.velocity, position]);
+
   return (
-    <mesh ref={ringRef}>
-      <torusGeometry args={[2, 0.1, 16, 32]} />
+    <mesh
+      ref={particleRef}
+      position={[position.x, position.y, position.z]}
+    >
+      <sphereGeometry args={[data.size, 4, 4]} />
       <meshBasicMaterial
-        color="#ff00ff"
+        color={data.color}
         transparent
-        opacity={0.5}
+        opacity={data.opacity}
       />
     </mesh>
   );
 }
 
-function ExplosionEffect() {
-  const waveRef = useRef();
+// ========================================
+// 🛠️ UTILITY FUNCTIONS
+// ========================================
 
-  useFrame((state) => {
-    if (waveRef.current) {
-      const scale = state.clock.elapsedTime * 3;
-      const opacity = Math.max(0, 1 - state.clock.elapsedTime * 0.5);
+function initializeParticles(config) {
+  const count = config.count;
+  const positions = new Float32Array(count * 3);
+  const velocities = new Float32Array(count * 3);
+  const lifetimes = new Float32Array(count);
+  const sizes = new Float32Array(count);
+  const opacities = new Float32Array(count);
 
-      waveRef.current.scale.setScalar(scale);
-      waveRef.current.material.opacity = opacity;
-    }
-  });
+  for (let i = 0; i < count; i++) {
+    resetParticle(i, { positions, velocities, lifetimes, sizes, opacities }, config);
+  }
 
-  return (
-    <mesh ref={waveRef}>
-      <sphereGeometry args={[1, 16, 16]} />
-      <meshBasicMaterial
-        color="#ff4444"
-        transparent
-        opacity={0.3}
-        wireframe
-      />
-    </mesh>
-  );
+  return { positions, velocities, lifetimes, sizes, opacities };
 }
 
-function HealEffect() {
-  const spiralRef = useRef();
+function resetParticle(index, data, config) {
+  const i3 = index * 3;
+  const { positions, velocities, lifetimes, sizes, opacities } = data;
 
-  useFrame((state) => {
-    if (spiralRef.current) {
-      spiralRef.current.rotation.y = state.clock.elapsedTime * 2;
-      spiralRef.current.position.y = Math.sin(state.clock.elapsedTime * 3) * 0.5;
-    }
-  });
+  // Initial position (with some spread)
+  positions[i3] = MathUtils.randomFloat(-config.spread, config.spread);
+  positions[i3 + 1] = MathUtils.randomFloat(-config.spread * 0.5, config.spread * 0.5);
+  positions[i3 + 2] = MathUtils.randomFloat(-config.spread, config.spread);
 
-  return (
-    <group ref={spiralRef}>
-      {[...Array(6)].map((_, i) => (
-        <mesh
-          key={i}
-          position={[
-            Math.cos(i * Math.PI / 3) * 1.5,
-            i * 0.2,
-            Math.sin(i * Math.PI / 3) * 1.5
-          ]}
-        >
-          <sphereGeometry args={[0.1, 8, 8]} />
-          <meshBasicMaterial
-            color="#44ff44"
-            emissive="#004400"
-            emissiveIntensity={0.5}
-          />
-        </mesh>
-      ))}
-    </group>
-  );
+  // Initial velocity based on effect type
+  switch (config.type) {
+    case 'explosion':
+      const explosionAngle = Math.random() * Math.PI * 2;
+      const explosionSpeed = MathUtils.randomFloat(config.speed * 0.5, config.speed * 1.5);
+      velocities[i3] = Math.cos(explosionAngle) * explosionSpeed;
+      velocities[i3 + 1] = MathUtils.randomFloat(config.speed * 0.5, config.speed);
+      velocities[i3 + 2] = Math.sin(explosionAngle) * explosionSpeed;
+      break;
+
+    case 'fire':
+      velocities[i3] = MathUtils.randomFloat(-1, 1);
+      velocities[i3 + 1] = MathUtils.randomFloat(config.speed * 0.8, config.speed * 1.2);
+      velocities[i3 + 2] = MathUtils.randomFloat(-1, 1);
+      break;
+
+    case 'smoke':
+      velocities[i3] = MathUtils.randomFloat(-0.5, 0.5);
+      velocities[i3 + 1] = MathUtils.randomFloat(config.speed * 0.3, config.speed * 0.7);
+      velocities[i3 + 2] = MathUtils.randomFloat(-0.5, 0.5);
+      break;
+
+    case 'sparkle':
+      const sparkleAngle = Math.random() * Math.PI * 2;
+      const sparkleSpeed = MathUtils.randomFloat(config.speed * 0.3, config.speed * 0.8);
+      velocities[i3] = Math.cos(sparkleAngle) * sparkleSpeed;
+      velocities[i3 + 1] = MathUtils.randomFloat(-config.speed * 0.2, config.speed * 0.5);
+      velocities[i3 + 2] = Math.sin(sparkleAngle) * sparkleSpeed;
+      break;
+
+    default:
+      velocities[i3] = MathUtils.randomFloat(-config.speed, config.speed);
+      velocities[i3 + 1] = MathUtils.randomFloat(-config.speed, config.speed);
+      velocities[i3 + 2] = MathUtils.randomFloat(-config.speed, config.speed);
+  }
+
+  // Lifetime
+  lifetimes[index] = (config.duration / 1000) * MathUtils.randomFloat(0.5, 1.5);
+
+  // Initial size and opacity
+  sizes[index] = config.size * MathUtils.randomFloat(0.5, 1.5);
+  opacities[index] = config.opacity * MathUtils.randomFloat(0.7, 1.0);
+}
+
+function generateEnvironmentalEffects() {
+  const effects = [];
+  const particleCount = 100;
+
+  for (let i = 0; i < particleCount; i++) {
+    effects.push({
+      type: 'dust',
+      position: {
+        x: MathUtils.randomFloat(-50, 50),
+        y: MathUtils.randomFloat(0, 20),
+        z: MathUtils.randomFloat(-50, 50)
+      },
+      velocity: {
+        x: MathUtils.randomFloat(-0.1, 0.1),
+        y: MathUtils.randomFloat(0.1, 0.3),
+        z: MathUtils.randomFloat(-0.1, 0.1)
+      },
+      size: MathUtils.randomFloat(0.02, 0.08),
+      color: 0xcccccc,
+      opacity: MathUtils.randomFloat(0.1, 0.3),
+      offset: Math.random() * Math.PI * 2
+    });
+  }
+
+  return effects;
 }
 
 // ========================================
-// 🎯 EFECTOS PREDEFINIDOS
+// 🎆 EFFECT PRESETS
 // ========================================
 
-export function createExplosion(position, options = {}) {
-  if (window.gameEffects) {
-    return window.gameEffects.explosion(position, options);
-  }
+export const EffectPresets = {
+  explosion: (position, intensity = 1) => ({
+    type: 'explosion',
+    position,
+    count: Math.floor(50 * intensity),
+    duration: 2000,
+    spread: 3 * intensity,
+    speed: 8 * intensity,
+    gravity: -9.8,
+    color: 0xff6600,
+    size: 0.15 * intensity,
+    blending: THREE.AdditiveBlending
+  }),
+
+  fire: (position, intensity = 1) => ({
+    type: 'fire',
+    position,
+    count: Math.floor(30 * intensity),
+    duration: 3000,
+    spread: 1 * intensity,
+    speed: 4 * intensity,
+    gravity: -2,
+    color: 0xff4400,
+    size: 0.1 * intensity,
+    blending: THREE.AdditiveBlending
+  }),
+
+  smoke: (position, intensity = 1) => ({
+    type: 'smoke',
+    position,
+    count: Math.floor(20 * intensity),
+    duration: 5000,
+    spread: 2 * intensity,
+    speed: 2 * intensity,
+    gravity: -1,
+    color: 0x666666,
+    size: 0.2 * intensity,
+    opacity: 0.6,
+    blending: THREE.NormalBlending
+  }),
+
+  sparkle: (position, intensity = 1) => ({
+    type: 'sparkle',
+    position,
+    count: Math.floor(40 * intensity),
+    duration: 1500,
+    spread: 2 * intensity,
+    speed: 3 * intensity,
+    gravity: -3,
+    color: 0xffff00,
+    size: 0.08 * intensity,
+    blending: THREE.AdditiveBlending
+  }),
+
+  energy: (position, intensity = 1) => ({
+    type: 'energy',
+    position,
+    count: Math.floor(60 * intensity),
+    duration: 2500,
+    spread: 1.5 * intensity,
+    speed: 5 * intensity,
+    gravity: 0,
+    color: 0x00ffff,
+    size: 0.12 * intensity,
+    blending: THREE.AdditiveBlending
+  }),
+
+  heal: (position, intensity = 1) => ({
+    type: 'sparkle',
+    position,
+    count: Math.floor(25 * intensity),
+    duration: 2000,
+    spread: 1.5 * intensity,
+    speed: 2 * intensity,
+    gravity: -1,
+    color: 0x00ff88,
+    size: 0.1 * intensity,
+    blending: THREE.AdditiveBlending
+  }),
+
+  powerUp: (position, intensity = 1) => ({
+    type: 'energy',
+    position,
+    count: Math.floor(35 * intensity),
+    duration: 3000,
+    spread: 2 * intensity,
+    speed: 4 * intensity,
+    gravity: -0.5,
+    color: 0xff00ff,
+    size: 0.15 * intensity,
+    blending: THREE.AdditiveBlending
+  }),
+
+  death: (position, intensity = 1) => ({
+    type: 'explosion',
+    position,
+    count: Math.floor(40 * intensity),
+    duration: 1800,
+    spread: 2.5 * intensity,
+    speed: 6 * intensity,
+    gravity: -8,
+    color: 0x880000,
+    size: 0.12 * intensity,
+    blending: THREE.AdditiveBlending
+  })
+};
+
+// ========================================
+// 🎮 HOOK PARA EFECTOS DE PARTÍCULAS
+// ========================================
+
+export function useParticleEffects() {
+  const [effects, setEffects] = useState([]);
+
+  const addEffect = useCallback((effectData) => {
+    const newEffect = {
+      id: Date.now() + Math.random(),
+      ...effectData,
+      startTime: Date.now()
+    };
+    setEffects(prev => [...prev, newEffect]);
+
+    // Auto-remove after duration
+    setTimeout(() => {
+      setEffects(prev => prev.filter(effect => effect.id !== newEffect.id));
+    }, effectData.duration || 2000);
+  }, []);
+
+  const removeEffect = useCallback((effectId) => {
+    setEffects(prev => prev.filter(effect => effect.id !== effectId));
+  }, []);
+
+  const clearAllEffects = useCallback(() => {
+    setEffects([]);
+  }, []);
+
+  // Preset helpers
+  const createExplosion = useCallback((position, intensity) => {
+    addEffect(EffectPresets.explosion(position, intensity));
+  }, [addEffect]);
+
+  const createFire = useCallback((position, intensity) => {
+    addEffect(EffectPresets.fire(position, intensity));
+  }, [addEffect]);
+
+  const createSmoke = useCallback((position, intensity) => {
+    addEffect(EffectPresets.smoke(position, intensity));
+  }, [addEffect]);
+
+  const createSparkle = useCallback((position, intensity) => {
+    addEffect(EffectPresets.sparkle(position, intensity));
+  }, [addEffect]);
+
+  const createHeal = useCallback((position, intensity) => {
+    addEffect(EffectPresets.heal(position, intensity));
+  }, [addEffect]);
+
+  return {
+    effects,
+    addEffect,
+    removeEffect,
+    clearAllEffects,
+    // Preset creators
+    createExplosion,
+    createFire,
+    createSmoke,
+    createSparkle,
+    createHeal
+  };
 }
 
-export function createTrail(position, options = {}) {
-  if (window.gameEffects) {
-    return window.gameEffects.trail(position, options);
-  }
-}
-
-export function createCollectEffect(position, options = {}) {
-  if (window.gameEffects) {
-    return window.gameEffects.collect(position, options);
-  }
-}
-
-export function createJumpEffect(position, options = {}) {
-  if (window.gameEffects) {
-    return window.gameEffects.jump(position, options);
-  }
-}
-
-export function createDamageEffect(position, options = {}) {
-  if (window.gameEffects) {
-    return window.gameEffects.damage(position, options);
-  }
-}
-
-export function createHealEffect(position, options = {}) {
-  if (window.gameEffects) {
-    return window.gameEffects.heal(position, options);
-  }
-}
-
-export function createPowerupEffect(position, options = {}) {
-  if (window.gameEffects) {
-    return window.gameEffects.powerup(position, options);
-  }
-}
-
-export default ParticleEffectsManager;
+export default ParticleEffects;

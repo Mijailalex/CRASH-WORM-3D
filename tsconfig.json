@@ -1,18 +1,11 @@
 {
-  "//": "============================================================================",
-  "//": "📘 CRASH WORM 3D - TYPESCRIPT CONFIGURATION",
-  "//": "============================================================================",
-  "//": "Ubicación: tsconfig.json",
-  "//": "Configuración optimizada de TypeScript para React + Three.js + Game Dev",
-
   "compilerOptions": {
-    "//": "========================================",
-    "//": "🏗️ CONFIGURACIÓN DE COMPILACIÓN",
-    "//": "========================================",
-
-    "target": "ES2022",
+    // ========================================
+    // 🎯 TARGET Y MÓDULOS
+    // ========================================
+    "target": "ES2020",
     "lib": [
-      "ES2023",
+      "ES2020",
       "DOM",
       "DOM.Iterable",
       "WebWorker"
@@ -23,182 +16,158 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "useDefineForClassFields": true,
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
 
-    "//": "========================================",
-    "//": "⚛️ CONFIGURACIÓN REACT/JSX",
-    "//": "========================================",
-
-    "jsx": "react-jsx",
-    "jsxFactory": "React.createElement",
-    "jsxFragmentFactory": "React.Fragment",
-    "jsxImportSource": "react",
-
-    "//": "========================================",
-    "//": "📁 RESOLUCIÓN DE PATHS",
-    "//": "========================================",
-
+    // ========================================
+    // 📁 PATH MAPPING
+    // ========================================
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@/components/*": ["src/components/*"],
-      "@/core/*": ["src/core/*"],
-      "@/hooks/*": ["src/hooks/*"],
-      "@/utils/*": ["src/utils/*"],
-      "@/styles/*": ["src/styles/*"],
-      "@/data/*": ["src/data/*"],
-      "@/context/*": ["src/context/*"],
-      "@/types/*": ["src/types/*"],
-      "@/assets/*": ["src/assets/*"]
+      "@components/*": ["src/components/*"],
+      "@core/*": ["src/core/*"],
+      "@hooks/*": ["src/hooks/*"],
+      "@utils/*": ["src/utils/*"],
+      "@styles/*": ["src/styles/*"],
+      "@data/*": ["src/data/*"],
+      "@context/*": ["src/context/*"],
+      "@types/*": ["src/types/*"],
+      "@assets/*": ["src/assets/*"],
+      "@public/*": ["public/*"]
     },
 
-    "//": "========================================",
-    "//": "🔍 CONFIGURACIÓN DE TIPOS",
-    "//": "========================================",
+    // ========================================
+    // 🔧 COMPILACIÓN
+    // ========================================
+    "useDefineForClassFields": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": false,
+    "forceConsistentCasingInFileNames": true,
+    "verbatimModuleSyntax": true,
 
+    // ========================================
+    // 🎮 JSX CONFIGURATION
+    // ========================================
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+
+    // ========================================
+    // 📊 TYPE CHECKING
+    // ========================================
     "strict": true,
-    "noImplicitAny": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": false,
+    "noImplicitReturns": true,
+    "noImplicitOverride": true,
+    "noImplicitAny": false,
     "strictNullChecks": true,
     "strictFunctionTypes": true,
     "strictBindCallApply": true,
-    "strictPropertyInitialization": true,
+    "strictPropertyInitialization": false,
     "noImplicitThis": true,
     "alwaysStrict": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
+
+    // ========================================
+    // 🔍 ADDITIONAL CHECKS
+    // ========================================
     "noUncheckedIndexedAccess": false,
-    "noImplicitOverride": true,
-    "exactOptionalPropertyTypes": false,
-
-    "//": "========================================",
-    "//": "⚠️ CONFIGURACIÓN DE ERRORES Y WARNINGS",
-    "//": "========================================",
-
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noPropertyAccessFromIndexSignature": false,
-    "allowUnusedLabels": false,
+    "noImplicitReturns": true,
     "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
 
-    "//": "========================================",
-    "//": "🎮 CONFIGURACIÓN ESPECÍFICA PARA GAME DEV",
-    "//": "========================================",
-
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
+    // ========================================
+    // 🛡️ ERROR REPORTING
+    // ========================================
+    "skipDefaultLibCheck": false,
     "skipLibCheck": true,
+
+    // ========================================
+    // 🎨 EMIT
+    // ========================================
     "declaration": false,
     "declarationMap": false,
     "sourceMap": true,
+    "outDir": "./dist",
     "removeComments": false,
     "importHelpers": true,
-
-    "//": "========================================",
-    "//": "📊 CONFIGURACIÓN DE SALIDA",
-    "//": "========================================",
-
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "incremental": true,
-    "tsBuildInfoFile": "./node_modules/.cache/typescript/tsbuildinfo",
-
-    "//": "========================================",
-    "//": "🔧 CONFIGURACIONES AVANZADAS",
-    "//": "========================================",
-
     "downlevelIteration": true,
-    "preserveConstEnums": false,
-    "suppressExcessPropertyErrors": false,
-    "suppressImplicitAnyIndexErrors": false,
-    "newLine": "lf",
-    "stripInternal": true,
 
-    "//": "========================================",
-    "//": "📚 TIPOS GLOBALES",
-    "//": "========================================",
+    // ========================================
+    // 🔧 INTEROP CONSTRAINTS
+    // ========================================
+    "isolatedModules": true,
+    "allowJs": true,
+    "checkJs": false,
+    "maxNodeModuleJsDepth": 1,
 
-    "types": [
-      "vite/client",
-      "node",
-      "jest",
-      "@testing-library/jest-dom",
-      "three",
-      "cannon"
-    ],
-    "typeRoots": [
-      "./node_modules/@types",
-      "./src/types"
-    ]
+    // ========================================
+    // 🎯 ADVANCED
+    // ========================================
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "incremental": true,
+    "tsBuildInfoFile": "./node_modules/.cache/tsbuildinfo.json"
   },
 
-  "//": "========================================",
-  "//": "📁 ARCHIVOS INCLUIDOS/EXCLUIDOS",
-  "//": "========================================",
-
+  // ========================================
+  // 📁 INCLUDE/EXCLUDE
+  // ========================================
   "include": [
     "src/**/*",
-    "src/**/*.ts",
     "src/**/*.tsx",
-    "src/**/*.js",
+    "src/**/*.ts",
     "src/**/*.jsx",
-    "src/**/*.vue",
+    "src/**/*.js",
     "tests/**/*",
     "vite.config.ts",
     "vitest.config.ts",
-    "playwright.config.ts"
+    "**/*.d.ts"
   ],
-
   "exclude": [
     "node_modules",
     "dist",
     "build",
-    ".vite",
     "coverage",
-    "public",
+    "**/*.spec.ts",
+    "**/*.test.ts",
+    "**/*.spec.tsx",
+    "**/*.test.tsx",
     "server/node_modules",
-    "**/*.test.js",
-    "**/*.spec.js",
-    "**/*.stories.*",
-    "storybook-static",
+    "server/dist",
     "docs",
-    ".github",
-    "scripts"
+    "public"
   ],
 
-  "//": "========================================",
-  "//": "🔧 CONFIGURACIONES DE REFERENCIA",
-  "//": "========================================",
-
+  // ========================================
+  // 🔗 REFERENCES
+  // ========================================
   "references": [
     {
-      "path": "./src"
+      "path": "./tsconfig.node.json"
     }
   ],
 
-  "//": "========================================",
-  "//": "⚙️ CONFIGURACIONES ESPECÍFICAS",
-  "//": "========================================",
-
-  "watchOptions": {
-    "watchFile": "useFsEvents",
-    "watchDirectory": "useFsEvents",
-    "fallbackPolling": "dynamicPriority",
-    "synchronousWatchDirectory": true,
-    "excludeDirectories": [
-      "**/node_modules",
-      "**/dist",
-      "**/build"
-    ]
+  // ========================================
+  // 🧪 TESTING
+  // ========================================
+  "ts-node": {
+    "esm": true,
+    "compilerOptions": {
+      "module": "ESNext",
+      "moduleResolution": "node"
+    }
   },
 
-  "compileOnSave": false,
-
-  "//": "========================================",
-  "//": "📋 CONFIGURACIONES HEREDADAS",
-  "//": "========================================",
-
-  "extends": []
+  // ========================================
+  // 🎮 GAME-SPECIFIC TYPE DEFINITIONS
+  // ========================================
+  "typeAcquisition": {
+    "enable": true,
+    "include": [
+      "three",
+      "tone",
+      "howler"
+    ]
+  }
 }
