@@ -17,9 +17,9 @@ export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const isProduction = mode === 'production';
   const isDevelopment = mode === 'development';
-  
+
   console.log(`🚀 Building for: ${mode} (${command})`);
-  
+
   return {
     // ========================================
     // 📁 CONFIGURACIÓN DE PATHS
@@ -27,7 +27,7 @@ export default defineConfig(({ command, mode }) => {
     root: '.',
     base: env.VITE_BASE_URL || '/',
     publicDir: 'public',
-    
+
     // Resolver aliases para imports limpios
     resolve: {
       alias: {
@@ -42,7 +42,7 @@ export default defineConfig(({ command, mode }) => {
         '@public': resolve(__dirname, 'public')
       }
     },
-    
+
     // ========================================
     // 🔌 PLUGINS
     // ========================================
@@ -54,8 +54,8 @@ export default defineConfig(({ command, mode }) => {
         babel: {
           plugins: isProduction ? [
             // Plugin para remover console.log en producción
-            ['babel-plugin-transform-remove-console', { 
-              exclude: ['error', 'warn', 'info'] 
+            ['babel-plugin-transform-remove-console', {
+              exclude: ['error', 'warn', 'info']
             }]
           ] : [],
           presets: [
@@ -71,7 +71,7 @@ export default defineConfig(({ command, mode }) => {
         include: /\.(jsx|js|ts|tsx)$/,
         exclude: /node_modules/
       }),
-      
+
       // Plugin personalizado para build info
       {
         name: 'build-info',
@@ -90,7 +90,7 @@ export default defineConfig(({ command, mode }) => {
               pwa: env.VITE_ENABLE_PWA !== 'false'
             }
           };
-          
+
           // Crear archivo de build info
           this.emitFile({
             type: 'asset',
@@ -100,7 +100,7 @@ export default defineConfig(({ command, mode }) => {
         }
       }
     ],
-    
+
     // ========================================
     // 🏗️ CONFIGURACIÓN DE BUILD
     // ========================================
@@ -108,10 +108,10 @@ export default defineConfig(({ command, mode }) => {
       // Directorio de salida
       outDir: 'dist',
       assetsDir: 'assets',
-      
+
       // Configuración de sourcemaps
       sourcemap: isDevelopment ? true : 'hidden',
-      
+
       // Configuración de minificación
       minify: isProduction ? 'terser' : false,
       terserOptions: isProduction ? {
@@ -132,11 +132,11 @@ export default defineConfig(({ command, mode }) => {
           comments: false
         }
       } : {},
-      
+
       // Configuración de CSS
       cssCodeSplit: true,
       cssMinify: isProduction,
-      
+
       // Configuración de chunks
       rollupOptions: {
         input: {
@@ -175,7 +175,7 @@ export default defineConfig(({ command, mode }) => {
               '@react-spring/three'
             ]
           },
-          
+
           // Nombres de archivos para cacheo optimal
           chunkFileNames: isProduction
             ? 'js/[name].[hash].js'
@@ -186,7 +186,7 @@ export default defineConfig(({ command, mode }) => {
           assetFileNames: (assetInfo) => {
             const info = assetInfo.name.split('.');
             const ext = info[info.length - 1];
-            
+
             // Organizar assets por tipo
             if (/\.(mp3|wav|ogg|m4a)$/i.test(assetInfo.name)) {
               return `audio/[name].[hash].${ext}`;
@@ -200,30 +200,30 @@ export default defineConfig(({ command, mode }) => {
             if (/\.css$/i.test(assetInfo.name)) {
               return `css/[name].[hash].${ext}`;
             }
-            
+
             return `assets/[name].[hash].${ext}`;
           }
         },
-        
+
         // Configuraciones adicionales de Rollup
         external: [],
-        
+
         // Plugins de Rollup
         plugins: []
       },
-      
+
       // Configuración de assets
       assetsInlineLimit: 4096, // 4KB limite para inline assets
-      
+
       // Configuración de chunks
       chunkSizeWarningLimit: 1000,
-      
+
       // Configuración de watch (desarrollo)
       watch: isDevelopment ? {
         include: 'src/**',
         exclude: ['node_modules/**', 'dist/**']
       } : null,
-      
+
       // Target de build
       target: [
         'es2020',
@@ -232,11 +232,11 @@ export default defineConfig(({ command, mode }) => {
         'safari14',
         'edge88'
       ],
-      
+
       // Configuración de polyfills
       polyfillModulePreload: true
     },
-    
+
     // ========================================
     // 🔍 CONFIGURACIÓN DE DESARROLLO
     // ========================================
@@ -244,13 +244,13 @@ export default defineConfig(({ command, mode }) => {
       port: parseInt(env.VITE_PORT) || 3000,
       host: env.VITE_HOST || 'localhost',
       open: env.VITE_OPEN_BROWSER !== 'false',
-      
+
       // Configuración HTTPS para desarrollo
       https: env.VITE_HTTPS === 'true' ? {
         key: env.VITE_HTTPS_KEY,
         cert: env.VITE_HTTPS_CERT
       } : false,
-      
+
       // Configuración de proxy para API
       proxy: {
         '/api': {
@@ -259,7 +259,7 @@ export default defineConfig(({ command, mode }) => {
           secure: false,
           rewrite: (path) => path.replace(/^\/api/, '')
         },
-        
+
         // Proxy para WebSocket del juego
         '/socket.io': {
           target: env.VITE_WEBSOCKET_URL || 'ws://localhost:8081',
@@ -267,7 +267,7 @@ export default defineConfig(({ command, mode }) => {
           changeOrigin: true
         }
       },
-      
+
       // Configuración de CORS
       cors: {
         origin: [
@@ -277,7 +277,7 @@ export default defineConfig(({ command, mode }) => {
         ],
         credentials: true
       },
-      
+
       // Configuración de headers de seguridad
       headers: {
         'X-Content-Type-Options': 'nosniff',
@@ -285,20 +285,20 @@ export default defineConfig(({ command, mode }) => {
         'X-XSS-Protection': '1; mode=block',
         'Referrer-Policy': 'strict-origin-when-cross-origin'
       },
-      
+
       // HMR (Hot Module Replacement)
       hmr: {
         port: parseInt(env.VITE_HMR_PORT) || 24678,
         overlay: true
       },
-      
+
       // File watching
       watch: {
         usePolling: env.VITE_USE_POLLING === 'true',
         ignored: ['**/node_modules/**', '**/dist/**']
       }
     },
-    
+
     // ========================================
     // 🏁 CONFIGURACIÓN DE PREVIEW
     // ========================================
@@ -307,7 +307,7 @@ export default defineConfig(({ command, mode }) => {
       host: env.VITE_PREVIEW_HOST || 'localhost',
       https: env.VITE_PREVIEW_HTTPS === 'true',
       open: env.VITE_PREVIEW_OPEN !== 'false',
-      
+
       // Headers de seguridad para preview
       headers: {
         'X-Content-Type-Options': 'nosniff',
@@ -318,7 +318,7 @@ export default defineConfig(({ command, mode }) => {
         'Permissions-Policy': 'geolocation=(), microphone=(), camera=()'
       }
     },
-    
+
     // ========================================
     // 🔧 OPTIMIZACIÓN DE DEPENDENCIAS
     // ========================================
@@ -342,12 +342,12 @@ export default defineConfig(({ command, mode }) => {
         'crypto-js',
         'lz-string'
       ],
-      
+
       // Exclusiones
       exclude: [
         'electron'
       ],
-      
+
       // Configuración de esbuild
       esbuildOptions: {
         target: 'es2020',
@@ -356,15 +356,15 @@ export default defineConfig(({ command, mode }) => {
         }
       }
     },
-    
+
     // ========================================
     // 🔒 CONFIGURACIÓN DE SEGURIDAD
     // ========================================
-    
+
     // Variables de entorno
     envPrefix: ['VITE_', 'REACT_APP_'],
     envDir: '.',
-    
+
     // ========================================
     // 🎯 CONFIGURACIÓN ESPECÍFICA DEL MODO
     // ========================================
@@ -375,28 +375,28 @@ export default defineConfig(({ command, mode }) => {
       __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
       __VERSION__: JSON.stringify(env.npm_package_version || '1.0.0'),
       __COMMIT_HASH__: JSON.stringify(env.VITE_COMMIT_HASH || 'unknown'),
-      
+
       // Feature flags
       __ENABLE_MULTIPLAYER__: env.VITE_ENABLE_MULTIPLAYER !== 'false',
       __ENABLE_ANALYTICS__: env.VITE_ENABLE_ANALYTICS !== 'false',
       __ENABLE_PWA__: env.VITE_ENABLE_PWA !== 'false',
       __ENABLE_WEBXR__: env.VITE_ENABLE_WEBXR === 'true',
-      
+
       // URLs de API
       __API_URL__: JSON.stringify(env.VITE_API_URL || 'http://localhost:8080'),
       __WEBSOCKET_URL__: JSON.stringify(env.VITE_WEBSOCKET_URL || 'ws://localhost:8081')
     },
-    
+
     // ========================================
     // 📊 CONFIGURACIÓN DE PERFORMANCE
     // ========================================
-    
+
     // Worker configuración
     worker: {
       format: 'es',
       plugins: []
     },
-    
+
     // CSS configuración
     css: {
       devSourcemap: isDevelopment,
@@ -407,7 +407,7 @@ export default defineConfig(({ command, mode }) => {
       },
       modules: {
         scopeBehaviour: 'local',
-        generateScopedName: isProduction 
+        generateScopedName: isProduction
           ? '[hash:base64:5]'
           : '[name]__[local]__[hash:base64:5]'
       },
@@ -417,13 +417,13 @@ export default defineConfig(({ command, mode }) => {
         ]
       }
     },
-    
+
     // ========================================
     // 🔍 CONFIGURACIÓN DE LOGGING
     // ========================================
     logLevel: isDevelopment ? 'info' : 'warn',
     clearScreen: false,
-    
+
     // ========================================
     // 📱 CONFIGURACIÓN EXPERIMENTAL
     // ========================================
